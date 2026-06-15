@@ -542,7 +542,7 @@
         <div class="section-title">📷 Novo Registro</div>
         <form id="registro-form" enctype="multipart/form-data">
           <label class="upload-zone" for="file-input">
-            <input type="file" id="file-input" name="img" accept="image/*" capture="environment" onchange="previewImage(event)">
+            <input type="file" id="file-input" name="img" accept="image/*" onchange="previewImage(event)">
             <img id="preview-img" alt="preview" style="display:none;">
             <div id="upload-text">
               <div class="upload-icon">📷</div>
@@ -628,7 +628,7 @@
           </div>
           <div class="form-group">
             <label>Foto da denúncia (opcional)</label>
-            <input type="file" id="den-img" name="img" accept="image/*" capture="environment">
+            <input type="file" id="den-img" name="img" accept="image/*">
             <small style="display:block;margin-top:.35rem;color:var(--cinza);">Você pode anexar uma imagem para ajudar na identificação do problema.</small>
           </div>
           <div class="form-row">
@@ -1410,50 +1410,51 @@ function getImageReactions(imageId) {
   const reactions = getStoredGalleryReactions();
   const imageReactions = reactions[imageId] || reactions[String(imageId)] || reactions[Number(imageId)] || null;
   if (!imageReactions || typeof imageReactions !== 'object') {
-    return { counts: { verde: 0, amor: 0, estrela: 0 }, users: {} };
+    return { count: 0, users: {} };
   }
-  const counts = imageReactions.counts && typeof imageReactions.counts === 'object'
-    ? imageReactions.counts
-    : { verde: 0, amor: 0, estrela: 0 };
+
+  let count = 0;
+  if (imageReactions.count !== undefined) {
+    count = Number(imageReactions.count) || 0;
+  } else if (imageReactions.counts && typeof imageReactions.counts === 'object') {
+    count = (Number(imageReactions.counts.verde) || 0)
+      + (Number(imageReactions.counts.amor) || 0)
+      + (Number(imageReactions.counts.estrela) || 0);
+  }
+
   return {
-    counts: {
-      verde: Number(counts.verde) || 0,
-      amor: Number(counts.amor) || 0,
-      estrela: Number(counts.estrela) || 0
-    },
+    count,
     users: imageReactions.users && typeof imageReactions.users === 'object' ? imageReactions.users : {}
   };
 }
 
 function getReactionsForImage(imageId) {
-  return getImageReactions(imageId).counts;
+  return getImageReactions(imageId).count;
 }
 
 function getUserReactionForImage(imageId) {
   const imageReactions = getImageReactions(imageId);
-  if (!state.user || !imageReactions.users) return null;
-  return imageReactions.users[state.user.id] || imageReactions.users[String(state.user.id)] || null;
+  if (!state.user || !imageReactions.users) return false;
+  return !!(imageReactions.users[state.user.id] || imageReactions.users[String(state.user.id)]);
 }
 
-function addReaction(imageId, type) {
+function addReaction(imageId) {
   if (!state.user) {
-    toast('Faça login para reagir.', 'error');
+    toast('Faça login para curtir.', 'error');
     return;
   }
 
   const reactions = getStoredGalleryReactions();
-  const imageReactions = reactions[imageId] || { counts: { verde: 0, amor: 0, estrela: 0 }, users: {} };
-  const existing = imageReactions.users[state.user.id];
+  const imageReactions = reactions[imageId] || { count: 0, users: {} };
+  const existing = imageReactions.users[state.user.id] || imageReactions.users[String(state.user.id)];
 
   if (existing) {
-    toast('Você já reagiu a esta imagem.', 'error');
+    toast('Você já curtiu esta imagem.', 'error');
     return;
   }
 
-  if (type === '🌿') imageReactions.counts.verde += 1;
-  if (type === '😍') imageReactions.counts.amor += 1;
-  if (type === '⭐') imageReactions.counts.estrela += 1;
-  imageReactions.users[state.user.id] = type;
+  imageReactions.count += 1;
+  imageReactions.users[state.user.id] = true;
   reactions[imageId] = imageReactions;
   saveGalleryReactions(reactions);
 
@@ -1462,9 +1463,9 @@ function addReaction(imageId, type) {
     button.classList.add('reacted');
   });
 
-  const card = document.querySelector(`.reaction-btn[data-image="${imageId}"][data-type="${type}"] span`);
-  if (card) card.textContent = type === '🌿' ? imageReactions.counts.verde : type === '😍' ? imageReactions.counts.amor : imageReactions.counts.estrela;
-  toast('Você reagiu com ' + type + '!', 'success');
+  const card = document.querySelector(`.reaction-btn[data-image="${imageId}"] span`);
+  if (card) card.textContent = imageReactions.count;
+  toast('Você curtiu esta foto!', 'success');
 }
 
 function getRandomCuriosidade() {
@@ -1488,9 +1489,22 @@ function renderFeaturedImage(imagens) {
 
   const selectedId = getFeaturedImageId();
   let destaque = null;
-  if (selectedId) {
+  const topLiked = imagens.reduce((best, img) => {
+    const likes = getReactionsForImage(img.id);
+    if (!best || likes > best.likes) {
+      return { img, likes };
+    }
+    return best;
+  }, null);
+
+  if (topLiked && topLiked.likes > 0) {
+    destaque = topLiked.img;
+  }
+
+  if (!destaque && selectedId) {
     destaque = imagens.find(img => String(img.id) === selectedId);
   }
+
   if (!destaque) {
     destaque = imagens[Math.floor(Math.random() * imagens.length)];
   }
@@ -1580,9 +1594,7 @@ async function loadGaleria() {
           </div>
           ${img.desc ? `<div class="galeria-meta" style="margin-top:.5rem;font-style:italic;">"${img.desc}"</div>` : ''}
           <div class="galeria-reactions">
-            <button class="reaction-btn${reactedClass}" ${disabledAttr} data-image="${img.id}" data-type="🌿" onclick="addReaction(${img.id}, '🌿')">🌿 <span class="reaction-count">${reactions.verde}</span></button>
-            <button class="reaction-btn${reactedClass}" ${disabledAttr} data-image="${img.id}" data-type="😍" onclick="addReaction(${img.id}, '😍')">😍 <span class="reaction-count">${reactions.amor}</span></button>
-            <button class="reaction-btn${reactedClass}" ${disabledAttr} data-image="${img.id}" data-type="⭐" onclick="addReaction(${img.id}, '⭐')">⭐ <span class="reaction-count">${reactions.estrela}</span></button>
+            <button class="reaction-btn${reactedClass}" ${disabledAttr} data-image="${img.id}" onclick="addReaction(${img.id})">❤️ Curtir <span class="reaction-count">${reactions}</span></button>
           </div>
           ${state.user && state.user.tipo === 'admin' ? `<button class="galeria-delete" onclick="excluirImagem(${img.id})">Excluir imagem</button>` : ''}
           ${state.user && state.user.tipo === 'admin' ? `<div style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;">
