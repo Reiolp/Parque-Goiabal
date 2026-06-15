@@ -714,7 +714,6 @@
       <div class="info-card">
         <h3>🔮 Futuro</h3>
         <ul>
-          <li>Aplicativo mobile (fase 2)</li>
           <li>Integração com sistemas municipais</li>
           <li>Expansão para outras áreas verdes</li>
           <li>Parceria com órgãos ambientais</li>
@@ -1014,6 +1013,7 @@ function showPage(id) {
   document.getElementById('nav-'+id).classList.add('active');
   if (id === 'registro') loadRegistros();
   if (id === 'denuncia') loadDenuncias();
+  if (id === 'imagens') loadGaleria();
   if (id === 'perfil') loadPerfil();
   updateAvisos();
   return false;
@@ -1550,10 +1550,11 @@ async function loadGaleria() {
   
   try {
     const imagens = await fetchJson('/api/imagens');
+    console.log('loadGaleria imagens', imagens);
     
     loadingEl.style.display = 'none';
     
-    if (imagens.length === 0) {
+    if (!Array.isArray(imagens) || imagens.length === 0) {
       emptyEl.style.display = 'block';
       return;
     }
@@ -1723,7 +1724,8 @@ async function loadPerfil() {
     }
 
     const imagens = await fetchJson('/api/imagens');
-    const usuarioImagens = imagens.filter(img => img.usuario_id === state.user.id);
+    const currentUserId = String(state.user.id);
+    const usuarioImagens = imagens.filter(img => String(img.usuario_id) === currentUserId);
     
     document.getElementById('perfil-contribuicoes').textContent = `${usuarioImagens.length} foto${usuarioImagens.length !== 1 ? 's' : ''} enviada${usuarioImagens.length !== 1 ? 's' : ''}`;
 
@@ -1797,6 +1799,7 @@ async function appInit() {
     loadRegistros();
     loadDenuncias();
     loadCommunityFeed();
+    loadGaleria();
   } catch (e) {
     console.error('Erro ao conectar com o backend:', e);
     try { document.getElementById('server-status').style.display = 'block'; } catch (err) {}
