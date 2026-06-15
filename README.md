@@ -16,8 +16,10 @@ Este projeto pode ser hospedado em um serviço como Render, Railway ou PythonAny
 
 1. Crie uma conta em https://railway.app
 2. Faça novo projeto e escolha `Deploy from GitHub` ou `Deploy from repo`.
-3. No comando de start, escolha: `gunicorn Main:app`
-4. O Railway define a variável `PORT` automaticamente.
+3. Adicione um recurso de banco de dados PostgreSQL no Railway.
+4. Copie a string de conexão do Railway Postgres e defina a variável de ambiente `DATABASE_URL`.
+5. No comando de start, escolha: `gunicorn Main:app`
+6. O Railway define a variável `PORT` automaticamente.
 
 ## Observações
 
@@ -31,19 +33,28 @@ Este projeto pode ser hospedado em um serviço como Render, Railway ou PythonAny
 - Atenção: o banco SQLite e uploads em disco são efêmeros no Render; use armazenamento externo para dados persistentes se precisar.
 - Caso use outro serviço, garanta que o deploy execute `pip install -r requirements.txt` e `gunicorn Main:app`.
 
-## Supabase (recomendado para persistência)
+## Banco de dados Railway Postgres
 
-Para persistir usuários, logins e imagens mesmo após reinicializar ou atualizar o servidor, use Supabase.
+Para persistir usuários, logins e dados do aplicativo, use Railway Postgres como banco principal.
 
-1. Crie um projeto no https://supabase.com.
-2. Crie as tabelas no banco Postgres do Supabase ou use a aba SQL para criar o esquema com nomes `user`, `registro` e `denuncia`.
-3. Crie um bucket de storage para imagens.
-4. Defina as variáveis de ambiente no seu serviço de hospedagem:
-   - `DATABASE_URL` = string de conexão do banco Postgres do Supabase
+1. Crie um banco de dados PostgreSQL no Railway.
+2. Copie a string de conexão e defina a variável de ambiente:
+   - `DATABASE_URL` = string de conexão do banco Postgres do Railway
+3. No deploy, certifique-se de que `DATABASE_URL` esteja configurado no Railway.
+4. Crie o esquema de tabelas `users`, `registros` e `denuncias` usando o próprio app ou SQL.
+5. Opcionalmente, use Supabase apenas para storage de imagens e mantenha o banco no Railway.
+
+## Supabase storage opcional
+
+Para que as imagens continuem disponíveis após atualizações e deploys, você deve configurar um storage externo. O backend não deve depender de `uploads/` locais em Railway ou outros ambientes efêmeros.
+
+Se quiser continuar usando Supabase para armazenamento de imagens, defina estas variáveis:
    - `SUPABASE_URL` = URL do projeto Supabase (ex: `https://<projeto>.supabase.co`)
    - `SUPABASE_SERVICE_ROLE_KEY` = chave de serviço (recomendado para uploads seguros)
    - `SUPABASE_STORAGE_BUCKET` = nome do bucket de storage
-5. O backend usará Supabase como banco e storage quando estas variáveis estiverem configuradas.
+
+O backend agora usa Railway Postgres como banco principal e um storage externo para imagens quando essas variáveis estão configuradas.
+
 6. Use `GET /api/storage_check` para validar se a configuração de storage externa está funcionando.
 
 ## DigitalOcean Spaces

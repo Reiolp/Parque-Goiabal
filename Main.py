@@ -25,7 +25,7 @@ def env(name):
     value = os.environ.get(name)
     return value.strip() if isinstance(value, str) else value
 
-DATABASE_URL = env('DATABASE_URL') or env('SUPABASE_DB_URL')
+DATABASE_URL = env('DATABASE_URL')
 
 # Debug: mostrar qual URL está sendo usada
 print(f"🔧 DATABASE_URL configurado: {bool(DATABASE_URL)}")
@@ -41,6 +41,7 @@ else:
     print(f"⚠️  Usando SQLite local em: {DATABASE_PATH}")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DATABASE_PATH.replace('\\', '/')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
@@ -115,6 +116,13 @@ if STORAGE_ENABLED:
         client_args['endpoint_url'] = STORAGE_ENDPOINT_URL
     s3_client = boto3.client('s3', **client_args)
 
+EXTERNAL_STORAGE_ENABLED = STORAGE_ENABLED or SUPABASE_STORAGE_ENABLED
+print(f"🔧 STORAGE_ENABLED: {STORAGE_ENABLED}")
+print(f"🔧 EXTERNAL_STORAGE_ENABLED: {EXTERNAL_STORAGE_ENABLED}")
+
+if not EXTERNAL_STORAGE_ENABLED:
+    app.logger.warning('Nenhum storage externo configurado. Uploads de imagens falharão no deploy. Defina SPACES_BUCKET/AWS_S3_BUCKET/DO_SPACES_BUCKET ou SUPABASE_STORAGE_BUCKET.')
+
 def get_supabase_public_url(key):
     if not SUPABASE_URL or not SUPABASE_STORAGE_BUCKET:
         return None
@@ -134,6 +142,9 @@ def upload_file_to_storage(file_obj, key, content_type=None):
         except Exception as e:
             app.logger.error('Supabase storage upload error: %s', e)
             raise
+
+    if not STORAGE_ENABLED:
+        raise RuntimeError('Storage externo não configurado. Defina SPACES_BUCKET/DO_SPACES_BUCKET/AWS_S3_BUCKET com credenciais ou configure Supabase storage.')
 
     extra_args = {}
     if STORAGE_PUBLIC:
@@ -224,16 +235,22 @@ def create_admin_user():
             db.session.commit()
             print(f'Admin inicial criado: {admin_email}')
 
+DB_AVAILABLE = True
 with app.app_context():
-    db.create_all()
     try:
-        denuncia_columns = {column[1] for column in db.session.execute(text('PRAGMA table_info(denuncia)')).all()}
-        if 'img' not in denuncia_columns:
-            db.session.execute(text('ALTER TABLE denuncia ADD COLUMN img VARCHAR(300)'))
-            db.session.commit()
+        db.create_all()
+        try:
+            denuncia_columns = {column[1] for column in db.session.execute(text('PRAGMA table_info(denuncia)')).all()}
+            if 'img' not in denuncia_columns:
+                db.session.execute(text('ALTER TABLE denuncia ADD COLUMN img VARCHAR(300)'))
+                db.session.commit()
+        except Exception as e:
+            app.logger.error('Erro ao garantir coluna img em denuncia: %s', e)
+        create_admin_user()
     except Exception as e:
-        app.logger.error('Erro ao garantir coluna img em denuncia: %s', e)
-    create_admin_user()
+        DB_AVAILABLE = False
+        app.logger.error('Erro ao conectar ao banco de dados no startup: %s', e)
+        print('❌ Falha ao iniciar o banco de dados no startup. Verifique se o DATABASE_URL é acessível e se o host de deploy suporta a rota de rede.')
 
 @app.route('/')
 def index():
@@ -250,6 +267,14 @@ def storage_check():
     """Verifica se a configuração de armazenamento externo está ativa e tenta acessar o bucket.
     Use para validar que as variáveis de ambiente foram configuradas corretamente.
     """
+    if SUPABASE_STORAGE_ENABLED:
+        return jsonify({
+            'storage_enabled': True,
+            'backend': 'supabase',
+            'bucket': SUPABASE_STORAGE_BUCKET,
+            'url': SUPABASE_URL,
+            'ok': True
+        }), 200
     if not STORAGE_ENABLED:
         return jsonify({'storage_enabled': False, 'message': 'Armazenamento externo não está configurado (bucket ou credenciais ausentes)'}), 200
     try:
@@ -257,6 +282,7 @@ def storage_check():
         s3_client.head_bucket(Bucket=STORAGE_BUCKET)
         return jsonify({
             'storage_enabled': True,
+            'backend': 's3',
             'bucket': STORAGE_BUCKET,
             'region': STORAGE_REGION,
             'endpoint': STORAGE_ENDPOINT_URL,
@@ -266,6 +292,7 @@ def storage_check():
         err = e.response.get('Error', {})
         return jsonify({
             'storage_enabled': True,
+            'backend': 's3',
             'bucket': STORAGE_BUCKET,
             'region': STORAGE_REGION,
             'endpoint': STORAGE_ENDPOINT_URL,
@@ -319,7 +346,7 @@ def register():
                 
                 filename = secure_filename(file.filename)
                 filename = f"profile_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                if STORAGE_ENABLED:
+                if EXTERNAL_STORAGE_ENABLED:
                     key = f'profiles/{filename}'
                     try:
                         foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
@@ -328,13 +355,7 @@ def register():
                         print(f'❌ Erro ao enviar foto para storage: {e}')
                         return jsonify({'error': 'Erro ao salvar foto de perfil'}), 500
                 else:
-                    foto_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    try:
-                        file.save(foto_path)
-                        print(f"✓ Foto salva em: {foto_path}")
-                    except Exception as e:
-                        print(f'❌ Erro ao salvar foto: {e}')
-                        return jsonify({'error': 'Erro ao salvar foto de perfil'}), 500
+                    return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
 
         print(f"\n🔐 Criando hash de senha...")
         hashed_senha = generate_password_hash(senha)
@@ -420,7 +441,7 @@ def atualizar_foto():
         filename = secure_filename(file.filename)
         filename = f"profile_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
         
-        if STORAGE_ENABLED:
+        if EXTERNAL_STORAGE_ENABLED:
             key = f'perfis/{filename}'
             try:
                 foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
@@ -428,8 +449,7 @@ def atualizar_foto():
                 print(f'Erro ao enviar foto para storage: {e}')
                 return jsonify({'error': 'Erro ao salvar foto'}), 500
         else:
-            foto_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(foto_path)
+            return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
         
         user.foto = foto_path
         db.session.commit()
@@ -472,7 +492,7 @@ def registros():
                     
                     filename = secure_filename(file.filename)
                     filename = f"registro_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                    if STORAGE_ENABLED:
+                    if EXTERNAL_STORAGE_ENABLED:
                         key = f'registros/{filename}'
                         try:
                             img_path = upload_file_to_storage(file, key, content_type=file.content_type)
@@ -480,8 +500,7 @@ def registros():
                             print(f'Erro ao enviar imagem para storage: {e}')
                             return jsonify({'error': 'Erro ao salvar imagem'}), 500
                     else:
-                        img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                        file.save(img_path)
+                        return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
             registro = Registro(especie=especie, tipo=tipo, local=local, desc=desc, img=img_path, lat=lat, lng=lng, usuario_id=usuario_id)
             db.session.add(registro)
             db.session.commit()
@@ -551,7 +570,7 @@ def denuncias():
 
                 filename = secure_filename(file.filename)
                 filename = f"denuncia_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                if STORAGE_ENABLED:
+                if EXTERNAL_STORAGE_ENABLED:
                     key = f'denuncias/{filename}'
                     try:
                         img_path = upload_file_to_storage(file, key, content_type=file.content_type)
@@ -559,8 +578,7 @@ def denuncias():
                         print(f'Erro ao enviar imagem da denúncia para storage: {e}')
                         return jsonify({'error': 'Erro ao salvar imagem da denúncia'}), 500
                 else:
-                    img_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(img_path)
+                    return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
 
         denuncia = Denuncia(tipo=tipo, desc=desc, local=local, gravidade=gravidade, lat=lat, lng=lng, usuario_id=usuario_id, img=img_path)
         db.session.add(denuncia)
