@@ -21,9 +21,15 @@ CORS(app, origins="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'goiabal.db')
 DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DB_URL')
+
+# Debug: mostrar qual URL está sendo usada
+print(f"🔧 DATABASE_URL configurado: {bool(DATABASE_URL)}")
 if DATABASE_URL:
+    # Mostrar apenas os primeiros caracteres por segurança
+    print(f"🔧 DATABASE_URL começa com: {DATABASE_URL[:30]}...")
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 else:
+    print(f"⚠️  Usando SQLite local em: {DATABASE_PATH}")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DATABASE_PATH.replace('\\', '/')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
