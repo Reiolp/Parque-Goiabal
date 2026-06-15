@@ -10,12 +10,21 @@ from sqlalchemy import text
 import os
 from datetime import datetime
 
+try:
+    from supabase import create_client
+except ImportError:
+    create_client = None
+
 app = Flask(__name__)
 CORS(app, origins="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"], 
      allow_headers=["*"])
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'goiabal.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DATABASE_PATH.replace('\\', '/')
+DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DB_URL')
+if DATABASE_URL:
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DATABASE_PATH.replace('\\', '/')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
@@ -65,6 +74,18 @@ if STORAGE_BUCKET:
     else:
         STORAGE_BASE_URL = f'https://{STORAGE_BUCKET}.s3.{STORAGE_REGION}.amazonaws.com'
 
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('SUPABASE_KEY') or os.environ.get('SUPABASE_ANON_KEY')
+SUPABASE_STORAGE_BUCKET = os.environ.get('SUPABASE_STORAGE_BUCKET') or os.environ.get('SUPABASE_BUCKET')
+SUPABASE_CLIENT = None
+SUPABASE_STORAGE_ENABLED = False
+if SUPABASE_URL and SUPABASE_KEY and SUPABASE_STORAGE_BUCKET and create_client:
+    try:
+        SUPABASE_CLIENT = create_client(SUPABASE_URL, SUPABASE_KEY)
+        SUPABASE_STORAGE_ENABLED = True
+    except Exception as e:
+        app.logger.error('Erro ao inicializar Supabase client: %s', e)
+
 STORAGE_ENABLED = bool(STORAGE_BUCKET and STORAGE_ACCESS_KEY and STORAGE_SECRET_KEY)
 if STORAGE_ENABLED:
     client_args = {
@@ -76,7 +97,26 @@ if STORAGE_ENABLED:
         client_args['endpoint_url'] = STORAGE_ENDPOINT_URL
     s3_client = boto3.client('s3', **client_args)
 
+def get_supabase_public_url(key):
+    if not SUPABASE_URL or not SUPABASE_STORAGE_BUCKET:
+        return None
+    return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{key}"
+
 def upload_file_to_storage(file_obj, key, content_type=None):
+    if SUPABASE_STORAGE_ENABLED:
+        try:
+            if hasattr(file_obj, 'seek'):
+                file_obj.seek(0)
+            file_data = file_obj.read() if hasattr(file_obj, 'read') else file_obj
+            result = SUPABASE_CLIENT.storage.from_(SUPABASE_STORAGE_BUCKET).upload(key, file_data, content_type=content_type)
+            if isinstance(result, dict) and result.get('error'):
+                raise Exception(result.get('error'))
+            public_url = get_supabase_public_url(key)
+            return public_url
+        except Exception as e:
+            app.logger.error('Supabase storage upload error: %s', e)
+            raise
+
     extra_args = {}
     if STORAGE_PUBLIC:
         extra_args['ACL'] = 'public-read'
@@ -90,6 +130,16 @@ def upload_file_to_storage(file_obj, key, content_type=None):
     return f"{STORAGE_BASE_URL}/{key}"
 
 def delete_storage_object_by_url(url):
+    if SUPABASE_STORAGE_ENABLED and SUPABASE_URL and SUPABASE_STORAGE_BUCKET and url:
+        try:
+            prefix = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/"
+            if url.startswith(prefix):
+                key = url[len(prefix):]
+                SUPABASE_CLIENT.storage.from_(SUPABASE_STORAGE_BUCKET).remove([key])
+                return
+        except Exception as e:
+            app.logger.error('Supabase storage delete error: %s', e)
+            return
     if not STORAGE_ENABLED or not url:
         return
     if STORAGE_BASE_URL and url.startswith(STORAGE_BASE_URL):
@@ -100,6 +150,7 @@ def delete_storage_object_by_url(url):
             app.logger.error('Storage delete error: %s', e)
 
 class User(db.Model):
+    __tablename__ = 'users'
     id = db.Column(db.Integer, primary_key=True)
     nome = db.Column(db.String(100), nullable=False)
     sobrenome = db.Column(db.String(100))
@@ -109,6 +160,7 @@ class User(db.Model):
     foto = db.Column(db.String(300))  # path to profile image
 
 class Registro(db.Model):
+    __tablename__ = 'registros'
     id = db.Column(db.Integer, primary_key=True)
     especie = db.Column(db.String(200), nullable=False)
     tipo = db.Column(db.String(50), nullable=False)  # fauna or flora
@@ -117,11 +169,12 @@ class Registro(db.Model):
     img = db.Column(db.String(300))  # path to image
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref=db.backref('registros', lazy=True))
 
 class Denuncia(db.Model):
+    __tablename__ = 'denuncias'
     id = db.Column(db.Integer, primary_key=True)
     tipo = db.Column(db.String(50), nullable=False)  # incendio ou poluicao
     desc = db.Column(db.Text, nullable=False)
@@ -131,7 +184,7 @@ class Denuncia(db.Model):
     img = db.Column(db.String(300))  # path to optional evidence image
     lat = db.Column(db.Float)
     lng = db.Column(db.Float)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref=db.backref('denuncias', lazy=True))
 

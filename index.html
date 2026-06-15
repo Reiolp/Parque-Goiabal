@@ -541,8 +541,9 @@
       <div>
         <div class="section-title">📷 Novo Registro</div>
         <form id="registro-form" enctype="multipart/form-data">
-          <label class="upload-zone" for="file-input">
-            <input type="file" id="file-input" name="img" accept="image/*" onchange="previewImage(event)">
+          <label class="upload-zone" for="gallery-file-input">
+            <input type="file" id="gallery-file-input" name="img" accept="image/*" onchange="previewImage(event)">
+            <input type="file" id="camera-file-input" name="img" accept="image/*" capture="environment" onchange="previewImage(event)" style="display:none;">
             <img id="preview-img" alt="preview" style="display:none;">
             <div id="upload-text">
               <div class="upload-icon">📷</div>
@@ -550,6 +551,10 @@
               <p>JPG, PNG ou WebP — máx. 50MB</p>
             </div>
           </label>
+          <div class="upload-actions" style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:.75rem;">
+            <button type="button" class="btn-full" style="flex:1;min-width:160px;" onclick="triggerGalleryInput()">Escolher da galeria</button>
+            <button type="button" class="btn-full" style="flex:1;min-width:160px;" onclick="triggerCameraInput()">Tirar foto</button>
+          </div>
           <br>
           <div class="form-group">
             <label>Nome da espécie *</label>
@@ -1181,20 +1186,29 @@ function previewImage(event) {
   const input = event.target;
   const preview = document.getElementById('preview-img');
   const uploadText = document.getElementById('upload-text');
+  const galleryInput = document.getElementById('gallery-file-input');
+  const cameraInput = document.getElementById('camera-file-input');
   if (!preview || !uploadText || !input) return;
 
   if (input.files && input.files[0]) {
     const file = input.files[0];
-    
+
+    if (input.id === 'gallery-file-input' && cameraInput) {
+      cameraInput.value = '';
+    }
+    if (input.id === 'camera-file-input' && galleryInput) {
+      galleryInput.value = '';
+    }
+
     if (file.size > 50 * 1024 * 1024) {
       toast('Imagem muito grande. O tamanho máximo permitido é 50MB.', 'error');
       input.value = '';
-      preview.src = '';
+      preview.removeAttribute('src');
       preview.style.display = 'none';
       uploadText.style.display = 'block';
       return;
     }
-    
+
     const reader = new FileReader();
     reader.onload = function(e) {
       preview.src = e.target.result;
@@ -1214,6 +1228,16 @@ function previewImage(event) {
     preview.style.display = 'none';
     uploadText.style.display = 'block';
   }
+}
+
+function triggerGalleryInput() {
+  const galleryInput = document.getElementById('gallery-file-input');
+  if (galleryInput) galleryInput.click();
+}
+
+function triggerCameraInput() {
+  const cameraInput = document.getElementById('camera-file-input');
+  if (cameraInput) cameraInput.click();
 }
 
 function getLocation() {
@@ -1466,6 +1490,10 @@ function addReaction(imageId) {
   const card = document.querySelector(`.reaction-btn[data-image="${imageId}"] span`);
   if (card) card.textContent = imageReactions.count;
   toast('Você curtiu esta foto!', 'success');
+
+  if (document.getElementById('galeria-imagens')) {
+    loadGaleria();
+  }
 }
 
 function getRandomCuriosidade() {
