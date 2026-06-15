@@ -20,7 +20,12 @@ CORS(app, origins="*", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
      allow_headers=["*"])
 BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATABASE_PATH = os.path.join(BASE_DIR, 'goiabal.db')
-DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DB_URL')
+
+def env(name):
+    value = os.environ.get(name)
+    return value.strip() if isinstance(value, str) else value
+
+DATABASE_URL = env('DATABASE_URL') or env('SUPABASE_DB_URL')
 
 # Debug: mostrar qual URL está sendo usada
 print(f"🔧 DATABASE_URL configurado: {bool(DATABASE_URL)}")
@@ -84,11 +89,14 @@ if STORAGE_BUCKET:
     else:
         STORAGE_BASE_URL = f'https://{STORAGE_BUCKET}.s3.{STORAGE_REGION}.amazonaws.com'
 
-SUPABASE_URL = os.environ.get('SUPABASE_URL')
-SUPABASE_KEY = os.environ.get('SUPABASE_SERVICE_ROLE_KEY') or os.environ.get('SUPABASE_KEY') or os.environ.get('SUPABASE_ANON_KEY')
-SUPABASE_STORAGE_BUCKET = os.environ.get('SUPABASE_STORAGE_BUCKET') or os.environ.get('SUPABASE_BUCKET')
+SUPABASE_URL = env('SUPABASE_URL')
+SUPABASE_KEY = env('SUPABASE_SERVICE_ROLE_KEY') or env('SUPABASE_KEY') or env('SUPABASE_ANON_KEY')
+SUPABASE_STORAGE_BUCKET = env('SUPABASE_STORAGE_BUCKET') or env('SUPABASE_BUCKET')
 SUPABASE_CLIENT = None
 SUPABASE_STORAGE_ENABLED = False
+print(f"🔧 SUPABASE_URL: {SUPABASE_URL}")
+print(f"🔧 SUPABASE_STORAGE_BUCKET: {SUPABASE_STORAGE_BUCKET}")
+print(f"🔧 SUPABASE_KEY configurada: {bool(SUPABASE_KEY)}")
 if SUPABASE_URL and SUPABASE_KEY and SUPABASE_STORAGE_BUCKET and create_client:
     try:
         SUPABASE_CLIENT = create_client(SUPABASE_URL, SUPABASE_KEY)
