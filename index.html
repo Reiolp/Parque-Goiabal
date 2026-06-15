@@ -391,18 +391,18 @@
 
 <!-- NAV -->
 <nav>
-  <a href="#" class="logo" onclick="showPage('home')">
+  <a href="#" class="logo" onclick="return showPage('home')">
     <div class="logo-icon">🌿</div>
     Goiabal
   </a>
   <button class="nav-toggle" id="nav-toggle" aria-label="Abrir menu" onclick="toggleNav()">☰</button>
   <ul>
-    <li><a href="#" onclick="showPage('home')" class="active" id="nav-home">🏠 Início</a></li>
-    <li><a href="#" onclick="showPage('registro')" id="nav-registro">🦋 Biodiversidade</a></li>
-    <li><a href="#" onclick="showPage('denuncia')" id="nav-denuncia">🚨 Denúncias</a></li>
-    <li><a href="#" onclick="showPage('sobre')" id="nav-sobre">ℹ️ Sobre</a></li>
-    <li><a href="#" onclick="showPage('imagens')" id="nav-imagens">📸 Imagens</a></li>
-    <li id="nav-perfil-item" style="display:none;"><a href="#" onclick="showPage('perfil')" id="nav-perfil">👤 Meu perfil</a></li>
+    <li><a href="#" onclick="return showPage('home')" class="active" id="nav-home">🏠 Início</a></li>
+    <li><a href="#" onclick="return showPage('registro')" id="nav-registro">🦋 Biodiversidade</a></li>
+    <li><a href="#" onclick="return showPage('denuncia')" id="nav-denuncia">🚨 Denúncias</a></li>
+    <li><a href="#" onclick="return showPage('sobre')" id="nav-sobre">ℹ️ Sobre</a></li>
+    <li><a href="#" onclick="return showPage('imagens')" id="nav-imagens">📸 Imagens</a></li>
+    <li id="nav-perfil-item" style="display:none;"><a href="#" onclick="return showPage('perfil')" id="nav-perfil">👤 Meu perfil</a></li>
   </ul>
   <div class="nav-user">
     <div id="user-info">
@@ -535,7 +535,7 @@
   </div>
   <div class="page-content">
     <div id="registro-aviso" class="required-notice" style="display:none">
-      ⚠️ <span>Você precisa estar <a href="#" onclick="openModal()" style="color:var(--terra);font-weight:600">logado</a> para registrar espécies.</span>
+      ⚠️ <span>Você precisa estar <a href="#" onclick="openModal(); return false;" style="color:var(--terra);font-weight:600">logado</a> para registrar espécies.</span>
     </div>
     <div class="two-col">
       <div>
@@ -604,7 +604,7 @@
   </div>
   <div class="page-content">
     <div id="denuncia-aviso" class="required-notice" style="display:none">
-      ⚠️ <span>Você precisa estar <a href="#" onclick="openModal()" style="color:var(--terra);font-weight:600">logado</a> para registrar denúncias.</span>
+      ⚠️ <span>Você precisa estar <a href="#" onclick="openModal(); return false;" style="color:var(--terra);font-weight:600">logado</a> para registrar denúncias.</span>
     </div>
     <div class="two-col">
       <div>
@@ -847,8 +847,6 @@ let state = {
   tipoSelecionado: null,
   usuarios: [],
   galleryAutoRefreshInterval: null
-  usuarios: [],
-  galleryAutoRefreshInterval: null
 };
 let galleryMap = null;
 let galleryMarkers = [];
@@ -872,6 +870,21 @@ function apiUrl(path) {
 function resolveMediaUrl(path) {
   if (!path) return '';
   return path.startsWith('/') ? apiUrl(path) : path;
+}
+
+async function fetchJson(path, options = {}) {
+  const res = await fetch(apiUrl(path), options);
+  let data;
+  try {
+    data = await res.json();
+  } catch (err) {
+    data = null;
+  }
+  if (!res.ok) {
+    const message = data && data.error ? data.error : `Erro ${res.status}`;
+    throw new Error(message);
+  }
+  return data;
 }
 
 function setStaticMediaUrls() {
@@ -1271,10 +1284,11 @@ document.getElementById('registro-form').addEventListener('submit', async e => {
 
 async function loadRegistros() {
   try {
-    state.registros = await res.json();
+    state.registros = await fetchJson('/api/registros');
     renderRegistros();
   } catch (e) {
-    console.error(e);
+    console.error('Erro ao carregar registros:', e);
+    toast('Erro ao carregar registros.', 'error');
   }
 }
 
@@ -1331,10 +1345,11 @@ document.getElementById('denuncia-form').addEventListener('submit', async e => {
 
 async function loadDenuncias() {
   try {
-    state.denuncias = await res.json();
+    state.denuncias = await fetchJson('/api/denuncias');
     renderDenuncias();
   } catch (e) {
-    console.error(e);
+    console.error('Erro ao carregar denúncias:', e);
+    toast('Erro ao carregar denúncias.', 'error');
   }
 }
 
@@ -1370,12 +1385,12 @@ function emailPrefeitura() {
 // ── STATS ─────────────────────────────────────────────
 async function updateStats() {
   try {
-    const stats = await res.json();
+    const stats = await fetchJson('/api/stats');
     document.getElementById('stat-usuarios').textContent = stats.usuarios;
     document.getElementById('stat-registros').textContent = stats.registros;
     document.getElementById('stat-denuncias').textContent = stats.denuncias;
   } catch (e) {
-    console.error(e);
+    console.error('Erro ao atualizar estatísticas:', e);
   }
 }
 
@@ -1534,7 +1549,7 @@ async function loadGaleria() {
   gridEl.innerHTML = '';
   
   try {
-    const imagens = await res.json();
+    const imagens = await fetchJson('/api/imagens');
     
     loadingEl.style.display = 'none';
     
@@ -1617,9 +1632,7 @@ async function loadCommunityFeed() {
   gridEl.innerHTML = '';
 
   try {
-    if (!res.ok) throw new Error('Erro ao carregar feed');
-
-    const imagens = await res.json();
+    const imagens = await fetchJson('/api/imagens');
     const recentes = imagens.slice(0, 8);
 
     loadingEl.style.display = 'none';
@@ -1700,16 +1713,16 @@ async function loadPerfil() {
     document.getElementById('perfil-email').textContent = state.user.email;
     document.getElementById('perfil-tipo').textContent = state.user.tipo === 'admin' ? '⭐ Administrador' : '👤 Contribuidor';
     
-    const avatarDisplay = document.getElementById('perfil-avatar-img');
-    if (state.user.foto) {
-      avatarDisplay.innerHTML = `<img src="${resolveMediaUrl(state.user.foto)}" alt="Avatar de ${state.user.nome}">`;
-    } else {
-      avatarDisplay.textContent = state.user.nome[0].toUpperCase();
+    const avatarDisplay = document.querySelector('.perfil-avatar-display');
+    if (avatarDisplay) {
+      if (state.user.foto) {
+        avatarDisplay.innerHTML = `<img src="${resolveMediaUrl(state.user.foto)}" alt="Avatar de ${state.user.nome}">`;
+      } else {
+        avatarDisplay.textContent = state.user.nome[0].toUpperCase();
+      }
     }
 
-    if (!res.ok) throw new Error('Erro ao carregar imagens');
-    
-    const imagens = await res.json();
+    const imagens = await fetchJson('/api/imagens');
     const usuarioImagens = imagens.filter(img => img.usuario_id === state.user.id);
     
     document.getElementById('perfil-contribuicoes').textContent = `${usuarioImagens.length} foto${usuarioImagens.length !== 1 ? 's' : ''} enviada${usuarioImagens.length !== 1 ? 's' : ''}`;
@@ -1773,21 +1786,20 @@ async function excluirImagemUsuario(registroId) {
 async function appInit() {
   loadUserFromStorage();
   setStaticMediaUrls();
-  updateStats();
-  // check backend health before calling API endpoints
+
   try {
-    if (res.ok) {
-      // backend available — load dynamic content
-      loadRegistros();
-      loadDenuncias();
-      loadCommunityFeed();
-    } else {
-      // show persistent banner
-      try { document.getElementById('server-status').style.display = 'block'; } catch(e){}
+    const healthRes = await fetch(apiUrl('/api/health'), { method: 'GET' });
+    if (!healthRes.ok) {
+      throw new Error('Servidor indisponível');
     }
+    document.getElementById('server-status').style.display = 'none';
+    await updateStats();
+    loadRegistros();
+    loadDenuncias();
+    loadCommunityFeed();
   } catch (e) {
-    // backend unreachable — show banner
-    try { document.getElementById('server-status').style.display = 'block'; } catch(err){}
+    console.error('Erro ao conectar com o backend:', e);
+    try { document.getElementById('server-status').style.display = 'block'; } catch (err) {}
   }
 }
 
