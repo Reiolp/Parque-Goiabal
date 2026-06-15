@@ -25,8 +25,12 @@ DATABASE_URL = os.environ.get('DATABASE_URL') or os.environ.get('SUPABASE_DB_URL
 # Debug: mostrar qual URL está sendo usada
 print(f"🔧 DATABASE_URL configurado: {bool(DATABASE_URL)}")
 if DATABASE_URL:
-    # Mostrar apenas os primeiros caracteres por segurança
     print(f"🔧 DATABASE_URL começa com: {DATABASE_URL[:30]}...")
+    if DATABASE_URL.startswith(('http://', 'https://')):
+        raise RuntimeError(
+            'DATABASE_URL inválido: use a URL de conexão PostgreSQL completa (postgresql://...), '
+            'não a URL do projeto Supabase.'
+        )
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 else:
     print(f"⚠️  Usando SQLite local em: {DATABASE_PATH}")
