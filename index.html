@@ -273,6 +273,7 @@
   .galeria-item.visible { opacity:1; transform:translateY(0); }
   .galeria-item:hover { transform:translateY(-3px); box-shadow:0 10px 36px rgba(45,106,79,.18); }
   .galeria-img { width:100%; height:220px; object-fit:cover; display:block; }
+  .media-fallback { width:100%; min-height:220px; display:flex; align-items:center; justify-content:center; padding:1rem; background:var(--verde-palido); color:var(--cinza); font-weight:700; text-align:center; }
   .galeria-info { padding:1rem; }
   .galeria-info h4 { font-size:1rem; font-weight:700; margin-bottom:.5rem; }
   .galeria-meta { font-size:.8rem; color:var(--cinza); margin-bottom:.25rem; display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; }
@@ -876,8 +877,24 @@ function resolveMediaUrl(path) {
   return path.startsWith('/') ? apiUrl(path) : path;
 }
 
+function handleImageError(img) {
+  if (!img || img.dataset.fallbackApplied) return;
+  img.dataset.fallbackApplied = '1';
+  const fallback = document.createElement('div');
+  fallback.className = 'media-fallback';
+  fallback.textContent = 'Imagem indisponível';
+  img.replaceWith(fallback);
+}
+
 async function fetchJson(path, options = {}) {
-  const res = await fetch(apiUrl(path), options);
+  const method = (options.method || 'GET').toUpperCase();
+  const fetchOptions = method === 'GET'
+    ? { cache: 'no-store', ...options }
+    : options;
+  const requestPath = method === 'GET'
+    ? `${path}${path.includes('?') ? '&' : '?'}t=${Date.now()}`
+    : path;
+  const res = await fetch(apiUrl(requestPath), fetchOptions);
   let data;
   try {
     data = await res.json();
@@ -1625,7 +1642,7 @@ async function loadGaleria() {
       const isFeatured = selectedId && String(selectedId) === String(img.id);
       return `
       <div class="galeria-item">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="galeria-img" loading="lazy">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="galeria-img" loading="lazy" onerror="handleImageError(this)">
         <div class="galeria-info">
           <h4>${img.especie}</h4>
           ${isFeatured ? `<div class="featured-badge" style="margin-bottom:.5rem;">Destaque escolhido</div>` : ''}
@@ -1700,7 +1717,7 @@ async function loadCommunityFeed() {
 
     gridEl.innerHTML = recentes.map(img => `
       <article class="feed-card">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="feed-image" loading="lazy">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="feed-image" loading="lazy" onerror="handleImageError(this)">
         <div class="feed-body">
           <div class="feed-user">
             ${img.usuario_foto ? `<img src="${resolveMediaUrl(img.usuario_foto)}" alt="Foto de ${img.usuario}">` : '<span>👤</span>'}
@@ -1793,7 +1810,7 @@ async function loadPerfil() {
 
     gridEl.innerHTML = usuarioImagens.map(img => `
       <div class="perfil-imagem-card galeria-item">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" loading="lazy" class="galeria-img">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" loading="lazy" class="galeria-img" onerror="handleImageError(this)">
           <div style="color:var(--cinza);font-size:0.85rem;margin-bottom:0.5rem;">${img.local || 'Local não informado'}</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <span class="featured-badge">${img.tipo}</span>

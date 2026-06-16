@@ -128,6 +128,20 @@ def get_supabase_public_url(key):
         return None
     return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{key}"
 
+def normalize_storage_key(key):
+    normalized_key = key.replace('\\', '/').lstrip('/')
+    normalized_key = os.path.normpath(normalized_key).replace('\\', '/')
+    if normalized_key.startswith('../') or normalized_key == '..' or os.path.isabs(normalized_key):
+        raise ValueError('Caminho de arquivo inválido')
+    return normalized_key
+
+def media_url(path):
+    if not path:
+        return None
+    if path.startswith(('http://', 'https://', '/uploads/')):
+        return path
+    return f'/uploads/{path}'
+
 def upload_file_to_storage(file_obj, key, content_type=None):
     """
     Tenta fazer o upload para o Supabase ou S3/Spaces. 
@@ -165,15 +179,16 @@ def upload_file_to_storage(file_obj, key, content_type=None):
 
     # 3. Fallback: Armazenamento Local (Caso não haja bucket ativo)
     try:
-        filename = os.path.basename(key)
-        local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        normalized_key = normalize_storage_key(key)
+        local_path = os.path.join(app.config['UPLOAD_FOLDER'], *normalized_key.split('/'))
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
         
         if hasattr(file_obj, 'seek'):
             file_obj.seek(0)
             
         file_obj.save(local_path)
         app.logger.info(f'Arquivo salvo localmente com sucesso: {local_path}')
-        return filename
+        return normalized_key
     except Exception as e:
         app.logger.error('Erro ao salvar arquivo localmente: %s', e)
         raise
@@ -192,7 +207,8 @@ def delete_storage_object_by_url(url_or_filename):
     # Se não for uma URL da internet, assume que é um arquivo local da pasta uploads
     if not url_or_filename.startswith('http://') and not url_or_filename.startswith('https://'):
         try:
-            local_path = os.path.join(app.config['UPLOAD_FOLDER'], url_or_filename)
+            normalized_key = normalize_storage_key(url_or_filename.replace('/uploads/', '', 1))
+            local_path = os.path.join(app.config['UPLOAD_FOLDER'], *normalized_key.split('/'))
             if os.path.exists(local_path):
                 os.remove(local_path)
                 app.logger.info(f'Arquivo local deletado: {local_path}')
@@ -385,7 +401,7 @@ def register():
         
         foto_url = None
         if foto_path:
-            foto_url = foto_path if foto_path.startswith('http') else f'/uploads/{foto_path}'
+            foto_url = media_url(foto_path)
         
         return jsonify({'user': {'id': user.id, 'nome': user.nome, 'email': user.email, 'tipo': user.tipo, 'foto': foto_url}})
     except Exception as e:
@@ -403,9 +419,7 @@ def login():
     user = User.query.filter_by(email=email).first()
     if not user or not check_password_hash(user.senha, senha):
         return jsonify({'error': 'Credenciais inválidas'}), 401
-    foto_url = None
-    if user.foto:
-        foto_url = user.foto if user.foto.startswith('http') else f'/uploads/{user.foto}'
+    foto_url = media_url(user.foto)
     return jsonify({'user': {'id': user.id, 'nome': user.nome, 'email': user.email, 'tipo': user.tipo, 'foto': foto_url}})
 
 @app.route('/api/atualizar-foto', methods=['POST'])
@@ -449,7 +463,7 @@ def atualizar_foto():
         user.foto = foto_path
         db.session.commit()
         
-        foto_url = user.foto if user.foto.startswith('http') else f'/uploads/{user.foto}'
+        foto_url = media_url(user.foto)
         return jsonify({'message': 'Foto updated com sucesso', 'foto_url': foto_url}), 200
     except Exception as e:
         return jsonify({'error': f'Erro interno do servidor: {str(e)}'}), 500
@@ -504,10 +518,10 @@ def registros():
         for r in regs:
             img_url = None
             if r.img:
-                img_url = r.img if r.img.startswith('http') else f'/uploads/{r.img}'
+                img_url = media_url(r.img)
             usuario_foto_url = None
             if r.user and r.user.foto:
-                usuario_foto_url = r.user.foto if r.user.foto.startswith('http') else f'/uploads/{r.user.foto}'
+                usuario_foto_url = media_url(r.user.foto)
             result.append({
                 'id': r.id,
                 'especie': r.especie,
@@ -573,7 +587,7 @@ def denuncias():
         for d in dens:
             img_url = None
             if d.img:
-                img_url = d.img if d.img.startswith('http') else f'/uploads/{d.img}'
+                img_url = media_url(d.img)
             result.append({
                 'id': d.id,
                 'tipo': d.tipo,
@@ -617,10 +631,10 @@ def imagens():
     
     result = []
     for r in regs:
-        img_url = r.img if r.img.startswith('http') else f'/uploads/{r.img}'
+        img_url = media_url(r.img)
         usuario_foto_url = None
         if r.usuario_foto:
-            usuario_foto_url = r.usuario_foto if r.usuario_foto.startswith('http') else f'/uploads/{r.usuario_foto}'
+            usuario_foto_url = media_url(r.usuario_foto)
             
         result.append({
             'id': r.id,
@@ -665,7 +679,7 @@ def delete_imagem(registro_id):
     db.session.commit()
     return jsonify({'message': 'Registro excluído'})
 
-@app.route('/uploads/<filename>')
+@app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     from flask import make_response
     response = make_response(send_from_directory(app.config['UPLOAD_FOLDER'], filename))
