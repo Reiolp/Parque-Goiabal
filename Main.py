@@ -7,6 +7,7 @@ import boto3
 from botocore.exceptions import ClientError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 import os
 from datetime import datetime
 
@@ -274,6 +275,14 @@ class Denuncia(db.Model):
     usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     data = db.Column(db.DateTime, default=datetime.utcnow)
     user = db.relationship('User', backref=db.backref('denuncias', lazy=True))
+
+class Curtida(db.Model):
+    __tablename__ = 'curtidas'
+    id = db.Column(db.Integer, primary_key=True)
+    registro_id = db.Column(db.Integer, db.ForeignKey('registros.id'), nullable=False)
+    usuario_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    data = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint('registro_id', 'usuario_id', name='uq_curtida_registro_usuario'),)
 
 def create_admin_user():
     admin_email = os.environ.get('ADMIN_EMAIL', 'adm@adm.com')
@@ -624,10 +633,28 @@ def stats():
 
 @app.route('/api/imagens')
 def imagens():
+    usuario_id = request.args.get('usuario_id', type=int)
     regs = Registro.query.filter(Registro.img.isnot(None)).outerjoin(User, Registro.usuario_id == User.id).add_columns(
         Registro.id, Registro.especie, Registro.tipo, Registro.local, Registro.desc, Registro.img, Registro.lat, Registro.lng, Registro.data, Registro.usuario_id,
         User.nome.label('usuario'), User.foto.label('usuario_foto')
     ).order_by(Registro.data.desc()).all()
+
+    registro_ids = [r.id for r in regs]
+    curtidas_por_registro = {}
+    curtidas_usuario = set()
+    if registro_ids:
+        counts = db.session.query(
+            Curtida.registro_id,
+            db.func.count(Curtida.id)
+        ).filter(Curtida.registro_id.in_(registro_ids)).group_by(Curtida.registro_id).all()
+        curtidas_por_registro = {registro_id: count for registro_id, count in counts}
+
+        if usuario_id:
+            user_likes = Curtida.query.filter(
+                Curtida.usuario_id == usuario_id,
+                Curtida.registro_id.in_(registro_ids)
+            ).all()
+            curtidas_usuario = {like.registro_id for like in user_likes}
     
     result = []
     for r in regs:
@@ -648,9 +675,41 @@ def imagens():
             'lng': r.lng,
             'data': r.data.strftime('%d/%m/%Y'),
             'usuario': r.usuario or 'Usuário da comunidade',
-            'usuario_foto': usuario_foto_url
+            'usuario_foto': usuario_foto_url,
+            'curtidas': int(curtidas_por_registro.get(r.id, 0)),
+            'curtido': r.id in curtidas_usuario
         })
     return jsonify(result)
+
+@app.route('/api/imagens/<int:registro_id>/curtir', methods=['POST'])
+def curtir_imagem(registro_id):
+    data = request.get_json() or {}
+    usuario_id = data.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'error': 'Faça login para curtir.'}), 401
+
+    user = User.query.get(usuario_id)
+    if not user:
+        return jsonify({'error': 'Usuário não encontrado'}), 404
+
+    registro = Registro.query.get(registro_id)
+    if not registro or not registro.img:
+        return jsonify({'error': 'Imagem não encontrada'}), 404
+
+    existing = Curtida.query.filter_by(registro_id=registro_id, usuario_id=usuario_id).first()
+    if existing:
+        count = Curtida.query.filter_by(registro_id=registro_id).count()
+        return jsonify({'message': 'Você já curtiu esta imagem.', 'curtidas': count, 'curtido': True}), 200
+
+    curtida = Curtida(registro_id=registro_id, usuario_id=usuario_id)
+    db.session.add(curtida)
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+
+    count = Curtida.query.filter_by(registro_id=registro_id).count()
+    return jsonify({'message': 'Curtida registrada.', 'curtidas': count, 'curtido': True})
 
 @app.route('/api/imagens/<int:registro_id>', methods=['DELETE'])
 def delete_imagem(registro_id):
@@ -674,7 +733,8 @@ def delete_imagem(registro_id):
             delete_storage_object_by_url(registro.img)
         except Exception as e:
             app.logger.error('Erro ao apagar imagem associada: %s', e)
-            
+
+    Curtida.query.filter_by(registro_id=registro.id).delete()
     db.session.delete(registro)
     db.session.commit()
     return jsonify({'message': 'Registro excluído'})

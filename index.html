@@ -45,6 +45,7 @@
   .btn-login:hover { background:#3da870; }
   #user-info { display:none; align-items:center; gap:.5rem; color:#fff; font-size:.9rem; }
   #user-info .avatar { width:32px; height:32px; background:var(--verde-claro); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.85rem; color:var(--escuro); }
+  #user-info .avatar img { width:100%; height:100%; border-radius:50%; object-fit:cover; display:block; }
   .btn-sair { background:none; border:1px solid rgba(255,255,255,.3); color:rgba(255,255,255,.7); padding:.35rem .7rem; border-radius:var(--radius-sm); font-size:.8rem; cursor:pointer; transition:.2s; }
   .btn-sair:hover { border-color:#fff; color:#fff; }
 
@@ -778,6 +779,8 @@
   <div class="page-content">
     <div class="perfil-header">
       <div class="perfil-avatar">
+        <label class="perfil-avatar-display" for="perfil-foto-input" title="Alterar foto de perfil">?</label>
+        <input type="file" id="perfil-foto-input" accept="image/*" onchange="atualizarFotoPerfil(event)" style="display:none;">
       </div>
       <div class="perfil-info">
         <h3 id="perfil-nome">Carregando...</h3>
@@ -883,6 +886,15 @@ function handleImageError(img) {
   img.replaceWith(fallback);
 }
 
+function userInitial(user = state.user) {
+  return user && user.nome ? user.nome.trim().charAt(0).toUpperCase() : '?';
+}
+
+function avatarImgHtml(user, altText = 'Foto de perfil') {
+  if (!user || !user.foto) return '';
+  return `<img src="${resolveMediaUrl(user.foto)}" alt="${altText}" onerror="this.replaceWith(document.createTextNode('${userInitial(user)}'))">`;
+}
+
 async function fetchJson(path, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
   const fetchOptions = method === 'GET'
@@ -903,6 +915,12 @@ async function fetchJson(path, options = {}) {
     throw new Error(message);
   }
   return data;
+}
+
+function imagensApiPath() {
+  return state.user
+    ? `/api/imagens?usuario_id=${encodeURIComponent(state.user.id)}`
+    : '/api/imagens';
 }
 
 function setStaticMediaUrls() {
@@ -1001,9 +1019,9 @@ function setUserUI(showToast = true) {
   document.getElementById('nav-perfil-item').style.display = 'block';
   const avatarEl = document.getElementById('user-avatar');
   if (state.user.foto) {
-    avatarEl.innerHTML = `<img src="${state.user.foto}" alt="Foto de perfil" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+    avatarEl.innerHTML = avatarImgHtml(state.user);
   } else {
-    avatarEl.textContent = state.user.nome[0].toUpperCase();
+    avatarEl.textContent = userInitial();
   }
   document.getElementById('user-name-nav').textContent = state.user.nome;
   updateStats();
@@ -1193,6 +1211,42 @@ function previewFotoPerfil(event) {
     reader.readAsDataURL(file);
   } else {
     previewContainer.style.display = 'none';
+  }
+}
+
+async function atualizarFotoPerfil(event) {
+  const input = event.target;
+  const file = input.files && input.files[0];
+  if (!state.user || !file) return;
+
+  if (file.size > 50 * 1024 * 1024) {
+    toast('Foto de perfil muito grande. O tamanho máximo permitido é 50MB.', 'error');
+    input.value = '';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append('usuario_id', state.user.id);
+  formData.append('foto', file);
+
+  try {
+    const res = await fetch(apiUrl('/api/atualizar-foto'), { method: 'POST', body: formData });
+    const data = await res.json();
+    if (!res.ok) {
+      toast(data.error || 'Não foi possível atualizar a foto.', 'error');
+      return;
+    }
+
+    state.user.foto = data.foto_url;
+    saveUserToStorage();
+    setUserUI(false);
+    loadPerfil();
+    toast('Foto de perfil atualizada.', 'success');
+  } catch (e) {
+    console.error('Erro ao atualizar foto de perfil:', e);
+    toast('Erro ao atualizar foto de perfil.', 'error');
+  } finally {
+    input.value = '';
   }
 }
 
@@ -1491,34 +1545,56 @@ function getUserReactionForImage(imageId) {
   return !!(imageReactions.users[state.user.id] || imageReactions.users[String(state.user.id)]);
 }
 
-function addReaction(imageId) {
+function getLikesForImage(img) {
+  if (!img) return 0;
+  return Number(img.curtidas ?? img.likes ?? img.reactions_count ?? 0) || 0;
+}
+
+function hasUserLikedImage(img) {
+  return !!(img && img.curtido);
+}
+
+async function addReaction(imageId) {
   if (!state.user) {
     toast('Faça login para curtir.', 'error');
     return;
   }
 
-  const reactions = getStoredGalleryReactions();
-  const imageReactions = reactions[imageId] || { count: 0, users: {} };
-  const existing = imageReactions.users[state.user.id] || imageReactions.users[String(state.user.id)];
-
-  if (existing) {
-    toast('Você já curtiu esta imagem.', 'error');
-    return;
-  }
-
-  imageReactions.count += 1;
-  imageReactions.users[state.user.id] = true;
-  reactions[imageId] = imageReactions;
-  saveGalleryReactions(reactions);
-
   document.querySelectorAll(`.reaction-btn[data-image="${imageId}"]`).forEach(button => {
     button.disabled = true;
-    button.classList.add('reacted');
   });
 
-  const card = document.querySelector(`.reaction-btn[data-image="${imageId}"] span`);
-  if (card) card.textContent = imageReactions.count;
-  toast('Você curtiu esta foto!', 'success');
+  try {
+    const res = await fetch(apiUrl(`/api/imagens/${imageId}/curtir`), {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ usuario_id: state.user.id })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      toast(data.error || 'Não foi possível curtir esta imagem.', 'error');
+      document.querySelectorAll(`.reaction-btn[data-image="${imageId}"]`).forEach(button => {
+        button.disabled = false;
+      });
+      return;
+    }
+
+    document.querySelectorAll(`.reaction-btn[data-image="${imageId}"]`).forEach(button => {
+      button.classList.add('reacted');
+      button.disabled = true;
+      const countEl = button.querySelector('.reaction-count');
+      if (countEl) countEl.textContent = Number(data.curtidas) || 0;
+    });
+    toast(data.message || 'Você curtiu esta foto!', 'success');
+  } catch (e) {
+    console.error('Erro ao curtir imagem:', e);
+    toast('Erro ao curtir imagem.', 'error');
+    document.querySelectorAll(`.reaction-btn[data-image="${imageId}"]`).forEach(button => {
+      button.disabled = false;
+    });
+    return;
+  }
 
   if (document.getElementById('galeria-imagens')) {
     loadGaleria();
@@ -1547,7 +1623,7 @@ function renderFeaturedImage(imagens) {
   const selectedId = getFeaturedImageId();
   let destaque = null;
   const topLiked = imagens.reduce((best, img) => {
-    const likes = getReactionsForImage(img.id);
+    const likes = getLikesForImage(img);
     if (!best || likes > best.likes) {
       return { img, likes };
     }
@@ -1620,7 +1696,7 @@ async function loadGaleria() {
   gridEl.innerHTML = '';
   
   try {
-    const imagens = await fetchJson('/api/imagens');
+    const imagens = await fetchJson(imagensApiPath());
     console.log('loadGaleria imagens', imagens);
     
     loadingEl.style.display = 'none';
@@ -1632,8 +1708,8 @@ async function loadGaleria() {
 
     const selectedId = getFeaturedImageId();
     const html = imagens.map(img => {
-      const reactions = getReactionsForImage(img.id);
-      const userReaction = getUserReactionForImage(img.id);
+      const reactions = getLikesForImage(img);
+      const userReaction = hasUserLikedImage(img);
       const disabledAttr = userReaction ? 'disabled' : '';
       const reactedClass = userReaction ? ' reacted' : '';
       const isFeatured = selectedId && String(selectedId) === String(img.id);
@@ -1702,7 +1778,7 @@ async function loadCommunityFeed() {
   gridEl.innerHTML = '';
 
   try {
-    const imagens = await fetchJson('/api/imagens');
+    const imagens = await fetchJson(imagensApiPath());
     const recentes = imagens.slice(0, 8);
 
     loadingEl.style.display = 'none';
@@ -1786,13 +1862,13 @@ async function loadPerfil() {
     const avatarDisplay = document.querySelector('.perfil-avatar-display');
     if (avatarDisplay) {
       if (state.user.foto) {
-        avatarDisplay.innerHTML = `<img src="${resolveMediaUrl(state.user.foto)}" alt="Avatar de ${state.user.nome}">`;
+        avatarDisplay.innerHTML = avatarImgHtml(state.user, `Avatar de ${state.user.nome}`);
       } else {
-        avatarDisplay.textContent = state.user.nome[0].toUpperCase();
+        avatarDisplay.textContent = userInitial();
       }
     }
 
-    const imagens = await fetchJson('/api/imagens');
+    const imagens = await fetchJson(imagensApiPath());
     const currentUserId = String(state.user.id);
     const usuarioImagens = imagens.filter(img => String(img.usuario_id) === currentUserId);
     
@@ -1806,8 +1882,10 @@ async function loadPerfil() {
     }
 
     gridEl.innerHTML = usuarioImagens.map(img => `
-      <div class="perfil-imagem-card galeria-item">
+      <div class="perfil-imagem-card galeria-item visible">
         <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" loading="lazy" class="galeria-img" onerror="handleImageError(this)">
+        <div class="galeria-info">
+          <h4>${img.especie}</h4>
           <div style="color:var(--cinza);font-size:0.85rem;margin-bottom:0.5rem;">${img.local || 'Local não informado'}</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <span class="featured-badge">${img.tipo}</span>
