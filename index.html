@@ -273,9 +273,18 @@
   .galeria-item { background:#fff; border-radius:var(--radius); overflow:hidden; box-shadow:var(--sombra); transition:.3s ease, transform .3s ease; opacity:0; transform:translateY(20px); }
   .galeria-item.visible { opacity:1; transform:translateY(0); }
   .galeria-item:hover { transform:translateY(-3px); box-shadow:0 10px 36px rgba(45,106,79,.18); }
+  .galeria-img, .registro-img img, .denuncia-item img, .feed-image, .perfil-imagem-card img { width:100%; height:220px; object-fit:cover; display:block; cursor:zoom-in; }
   .galeria-img { width:100%; height:220px; object-fit:cover; display:block; }
   .media-fallback { width:100%; min-height:220px; display:flex; align-items:center; justify-content:center; padding:1rem; background:var(--verde-palido); color:var(--cinza); font-weight:700; text-align:center; }
   .galeria-info { padding:1rem; }
+  .image-viewer-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.85); z-index:400; align-items:center; justify-content:center; padding:1rem; }
+  .image-viewer-overlay.open { display:flex; }
+  .image-viewer-content { position:relative; max-width:95vw; max-height:95vh; width:auto; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.75rem; }
+  .image-viewer-content img { max-width:100%; max-height:100%; border-radius:16px; box-shadow:0 20px 60px rgba(0,0,0,.35); }
+  .image-viewer-close { position:absolute; top:-0.5rem; right:-0.5rem; background:rgba(255,255,255,.95); border:none; width:36px; height:36px; border-radius:50%; font-size:1.1rem; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.2); }
+  .image-viewer-caption { color:#fff; text-align:center; max-width:90vw; font-size:.95rem; line-height:1.4; }
+  .image-viewer-caption small { color:rgba(255,255,255,.75); display:block; margin-top:.25rem; font-size:.84rem; }
+
   .galeria-info h4 { font-size:1rem; font-weight:700; margin-bottom:.5rem; }
   .galeria-meta { font-size:.8rem; color:var(--cinza); margin-bottom:.25rem; display:flex; align-items:center; gap:.3rem; flex-wrap:wrap; }
   .galeria-user { display:flex; align-items:center; gap:.4rem; margin-top:.5rem; }
@@ -845,6 +854,13 @@
 
 <!-- TOAST CONTAINER -->
 <div class="toast-container" id="toast-container"></div>
+<div class="image-viewer-overlay" id="image-viewer-overlay" onclick="if(event.target.id==='image-viewer-overlay') closeImageViewer()">
+  <div class="image-viewer-content">
+    <button class="image-viewer-close" onclick="closeImageViewer(); event.stopPropagation();">✕</button>
+    <img id="image-viewer-img" src="" alt="Visualização da imagem">
+    <div class="image-viewer-caption" id="image-viewer-caption"></div>
+  </div>
+</div>
 
 <script>
 // ── STATE ─────────────────────────────────────────────
@@ -946,10 +962,9 @@ function initGalleryMap() {
   const mapEl = document.getElementById('gallery-map');
   if (!mapEl || galleryMap) return;
   mapEl.textContent = '';
-  galleryMap = L.map('gallery-map', { zoomControl: false }).setView([-18.1147, -48.2859], 12);
+  galleryMap = L.map('gallery-map', { zoomControl: false, attributionControl: false }).setView([-18.1147, -48.2859], 12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
+    maxZoom: 19
   }).addTo(galleryMap);
 }
 
@@ -1404,7 +1419,7 @@ function renderRegistros() {
   if (!el) return;
   el.innerHTML = state.registros.map(r => `
     <div class="registro-card">
-      <div class="registro-img">${r.img ? `<img src="${resolveMediaUrl(r.img)}" alt="${r.especie}">` : (r.tipo==='fauna'?'🦎':'🌿')}</div>
+      <div class="registro-img">${r.img ? `<img src="${resolveMediaUrl(r.img)}" alt="${r.especie}" onclick="openImageViewer(this.src, '${r.especie.replace(/'/g,"\\'")}')">` : (r.tipo==='fauna'?'🦎':'🌿')}</div>
       <div class="registro-info">
         <h4>${r.especie}</h4>
         <div class="meta">📍 ${r.local} · ${r.data}</div>
@@ -1463,18 +1478,49 @@ async function loadDenuncias() {
 function renderDenuncias() {
   const el = document.getElementById('lista-denuncias');
   if (!el) return;
-  el.innerHTML = state.denuncias.map(d => `
-    <div class="denuncia-item ${d.tipo}">
-      <div class="di-icon">${d.tipo==='incendio'?'🔥':'🏭'}</div>
-      <div style="flex:1">
-        ${d.img ? `<img src="${resolveMediaUrl(d.img)}" alt="Foto da denúncia" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:.75rem;box-shadow:var(--sombra);">` : ''}
-        <h4>${d.tipo==='incendio'?'Incêndio':'Poluição'} — ${d.local}</h4>
-        <p>${d.desc.substring(0,100)}${d.desc.length>100?'...':''}</p>
-        <p style="margin-top:.25rem">👤 ${d.usuario} · ${d.data} · Gravidade: ${d.gravidade}</p>
-        <span class="status status-${d.status}">${d.status==='aberto'?'⏳ Aberto':d.status==='andamento'?'🔄 Em andamento':'✅ Resolvido'}</span>
+  el.innerHTML = state.denuncias.map(d => {
+    const canDelete = state.user && (state.user.tipo === 'admin' || String(state.user.id) === String(d.usuario_id));
+    return `
+      <div class="denuncia-item ${d.tipo}">
+        <div class="di-icon">${d.tipo==='incendio'?'🔥':'🏭'}</div>
+        <div style="flex:1">
+          ${d.img ? `<img src="${resolveMediaUrl(d.img)}" alt="Foto da denúncia" onclick="openImageViewer(this.src, '${(d.tipo==='incendio'?'Incêndio':'Poluição').replace(/'/g,"\\'")}')" style="width:100%;max-height:220px;object-fit:cover;border-radius:12px;margin-bottom:.75rem;box-shadow:var(--sombra);">` : ''}
+          <h4>${d.tipo==='incendio'?'Incêndio':'Poluição'} — ${d.local}</h4>
+          <p>${d.desc.substring(0,100)}${d.desc.length>100?'...':''}</p>
+          <p style="margin-top:.25rem">👤 ${d.usuario} · ${d.data} · Gravidade: ${d.gravidade}</p>
+          <span class="status status-${d.status}">${d.status==='aberto'?'⏳ Aberto':d.status==='andamento'?'🔄 Em andamento':'✅ Resolvido'}</span>
+          ${canDelete ? `<button class="galeria-delete" onclick="excluirDenuncia(${d.id})">Excluir denúncia</button>` : ''}
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
+}
+
+async function excluirDenuncia(denunciaId) {
+  if (!state.user) {
+    toast('Faça login para excluir denúncias.', 'error');
+    return;
+  }
+
+  if (!confirm('Tem certeza que deseja excluir esta denúncia? Esta ação não pode ser desfeita.')) return;
+
+  try {
+    const res = await fetch(apiUrl(`/api/denuncias/${denunciaId}`), {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ usuario_id: state.user.id })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      toast('Denúncia excluída com sucesso.', 'success');
+      loadDenuncias();
+    } else {
+      toast(data.error || 'Não foi possível excluir a denúncia.', 'error');
+    }
+  } catch (e) {
+    console.error('Erro ao excluir denúncia:', e);
+    toast('Erro ao excluir a denúncia.', 'error');
+  }
 }
 
 function ligar193() {
@@ -1675,6 +1721,25 @@ function removeFeaturedImage() {
   loadGaleria();
 }
 
+function openImageViewer(src, caption = '') {
+  const overlay = document.getElementById('image-viewer-overlay');
+  const imageEl = document.getElementById('image-viewer-img');
+  const captionEl = document.getElementById('image-viewer-caption');
+  if (!overlay || !imageEl || !captionEl) return;
+  imageEl.src = src;
+  imageEl.alt = caption || 'Visualização da imagem';
+  captionEl.textContent = caption || '';
+  overlay.classList.add('open');
+}
+
+function closeImageViewer() {
+  const overlay = document.getElementById('image-viewer-overlay');
+  const imageEl = document.getElementById('image-viewer-img');
+  if (!overlay || !imageEl) return;
+  overlay.classList.remove('open');
+  imageEl.src = '';
+}
+
 // ── TOAST ─────────────────────────────────────────────
 function toast(msg, type='') {
   const c = document.getElementById('toast-container');
@@ -1715,7 +1780,7 @@ async function loadGaleria() {
       const isFeatured = selectedId && String(selectedId) === String(img.id);
       return `
       <div class="galeria-item">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="galeria-img" loading="lazy" onerror="handleImageError(this)">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="galeria-img" loading="lazy" onerror="handleImageError(this)" onclick="openImageViewer(this.src, '${img.especie.replace(/'/g,"\\'")}')">
         <div class="galeria-info">
           <h4>${img.especie}</h4>
           ${isFeatured ? `<div class="featured-badge" style="margin-bottom:.5rem;">Destaque escolhido</div>` : ''}
@@ -1729,7 +1794,7 @@ async function loadGaleria() {
           <div class="galeria-reactions">
             <button class="reaction-btn${reactedClass}" ${disabledAttr} data-image="${img.id}" onclick="addReaction(${img.id})">❤️ Curtir <span class="reaction-count">${reactions}</span></button>
           </div>
-          ${state.user && state.user.tipo === 'admin' ? `<button class="galeria-delete" onclick="excluirImagem(${img.id})">Excluir imagem</button>` : ''}
+          ${state.user && (state.user.tipo === 'admin' || String(state.user.id) === String(img.usuario_id)) ? `<button class="galeria-delete" onclick="excluirImagem(${img.id})">Excluir imagem</button>` : ''}
           ${state.user && state.user.tipo === 'admin' ? `<div style="display:flex;gap:.5rem;margin-top:.75rem;flex-wrap:wrap;">
               <button class="btn-full" style="background:#1a5f30;border:none;min-width:170px;" onclick="setFeaturedImage(${img.id})">${selectedId && String(selectedId) === String(img.id) ? 'Destaque atual' : 'Definir destaque'}</button>
               ${selectedId && String(selectedId) === String(img.id) ? `<button class="btn-full" style="background:#a83c3c;border:none;min-width:170px;" onclick="removeFeaturedImage()">Remover destaque</button>` : ''}
@@ -1790,7 +1855,7 @@ async function loadCommunityFeed() {
 
     gridEl.innerHTML = recentes.map(img => `
       <article class="feed-card">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="feed-image" loading="lazy" onerror="handleImageError(this)">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" class="feed-image" loading="lazy" onerror="handleImageError(this)" onclick="openImageViewer(this.src, '${img.especie.replace(/'/g,"\\'")}')">
         <div class="feed-body">
           <div class="feed-user">
             ${img.usuario_foto ? `<img src="${resolveMediaUrl(img.usuario_foto)}" alt="Foto de ${img.usuario}">` : '<span>👤</span>'}
@@ -1816,8 +1881,8 @@ async function loadCommunityFeed() {
 }
 
 async function excluirImagem(registroId) {
-  if (!state.user || state.user.tipo !== 'admin') {
-    toast('Apenas administradores podem excluir imagens.', 'error');
+  if (!state.user) {
+    toast('Você precisa estar logado para excluir imagens.', 'error');
     return;
   }
   try {
@@ -1883,13 +1948,16 @@ async function loadPerfil() {
 
     gridEl.innerHTML = usuarioImagens.map(img => `
       <div class="perfil-imagem-card galeria-item visible">
-        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" loading="lazy" class="galeria-img" onerror="handleImageError(this)">
+        <img src="${resolveMediaUrl(img.img)}" alt="${img.especie}" loading="lazy" class="galeria-img" onerror="handleImageError(this)" onclick="openImageViewer(this.src, '${img.especie.replace(/'/g,"\\'")}')">
         <div class="galeria-info">
           <h4>${img.especie}</h4>
           <div style="color:var(--cinza);font-size:0.85rem;margin-bottom:0.5rem;">${img.local || 'Local não informado'}</div>
           <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
             <span class="featured-badge">${img.tipo}</span>
             <span style="color:var(--cinza);font-size:0.8rem;">${img.data}</span>
+          </div>
+          <div style="margin-top:0.75rem;">
+            <button class="galeria-delete" onclick="excluirImagemUsuario(${img.id})">Excluir imagem</button>
           </div>
         </div>
       </div>
@@ -1909,7 +1977,6 @@ async function excluirImagemUsuario(registroId) {
     return;
   }
 
-  if (!confirm('Tem certeza que deseja excluir esta imagem permanentemente? Esta ação não pode ser desfeita.')) return;
   if (!confirm('Tem certeza que deseja excluir esta imagem permanentemente? Esta ação não pode ser desfeita.')) return;
 
   try {

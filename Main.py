@@ -8,6 +8,7 @@ from botocore.exceptions import ClientError
 from sqlalchemy.orm import joinedload
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.pool import NullPool
 import os
 from datetime import datetime
 
@@ -29,20 +30,25 @@ def env(name):
 DATABASE_URL = env('DATABASE_URL')
 
 # Debug: mostrar qual URL está sendo usada
-print(f"🔧 DATABASE_URL configurado: {bool(DATABASE_URL)}")
+print('DATABASE_URL configurado:', bool(DATABASE_URL))
 if DATABASE_URL:
-    print(f"🔧 DATABASE_URL começa com: {DATABASE_URL[:30]}...")
+    print('DATABASE_URL começa com:', DATABASE_URL[:30] + '...')
     if DATABASE_URL.startswith(('http://', 'https://')):
         raise RuntimeError(
             'DATABASE_URL inválido: use a URL de conexão PostgreSQL completa (postgresql://...), '
             'não a URL do projeto Supabase.'
         )
     app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 else:
     print(f"⚠️  Usando SQLite local em: {DATABASE_PATH}")
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + DATABASE_PATH.replace('\\', '/')
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'pool_pre_ping': True,
+        'connect_args': {'check_same_thread': False},
+        'poolclass': NullPool,
+    }
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True}
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB
 
@@ -307,12 +313,12 @@ with app.app_context():
     try:
         db.create_all()
         try:
-            denuncia_columns = {column[1] for column in db.session.execute(text('PRAGMA table_info(denuncia)')).all()}
+            denuncia_columns = {column[1] for column in db.session.execute(text('PRAGMA table_info(denuncias)')).all()}
             if 'img' not in denuncia_columns:
-                db.session.execute(text('ALTER TABLE denuncia ADD COLUMN img VARCHAR(300)'))
+                db.session.execute(text('ALTER TABLE denuncias ADD COLUMN img VARCHAR(300)'))
                 db.session.commit()
         except Exception as e:
-            app.logger.error('Erro ao garantir coluna img em denuncia: %s', e)
+            app.logger.error('Erro ao garantir coluna img em denuncias: %s', e)
         create_admin_user()
     except Exception as e:
         DB_AVAILABLE = False
@@ -589,7 +595,7 @@ def denuncias():
         return jsonify({'message': 'Denúncia criada'})
     else:
         dens = Denuncia.query.join(User).add_columns(
-            Denuncia.id, Denuncia.tipo, Denuncia.desc, Denuncia.local, Denuncia.gravidade, Denuncia.status, Denuncia.lat, Denuncia.lng, Denuncia.data, Denuncia.img,
+            Denuncia.id, Denuncia.tipo, Denuncia.desc, Denuncia.local, Denuncia.gravidade, Denuncia.status, Denuncia.lat, Denuncia.lng, Denuncia.data, Denuncia.img, Denuncia.usuario_id,
             User.nome.label('usuario')
         ).all()
         result = []
@@ -608,9 +614,37 @@ def denuncias():
                 'lat': d.lat,
                 'lng': d.lng,
                 'data': d.data.strftime('%d/%m/%Y'),
-                'usuario': d.usuario
+                'usuario': d.usuario,
+                'usuario_id': d.usuario_id
             })
         return jsonify(result)
+
+@app.route('/api/denuncias/<int:denuncia_id>', methods=['DELETE'])
+def delete_denuncia(denuncia_id):
+    data = request.get_json() or {}
+    usuario_id = data.get('usuario_id')
+    if not usuario_id:
+        return jsonify({'error': 'Não autorizado'}), 401
+    user = User.query.get(usuario_id)
+    if not user:
+        return jsonify({'error': 'Usuário não encontrado'}), 404
+
+    denuncia = Denuncia.query.get(denuncia_id)
+    if not denuncia:
+        return jsonify({'error': 'Denúncia não encontrada'}), 404
+
+    if user.tipo != 'admin' and denuncia.usuario_id != usuario_id:
+        return jsonify({'error': 'Acesso negado'}), 403
+
+    if denuncia.img:
+        try:
+            delete_storage_object_by_url(denuncia.img)
+        except Exception as e:
+            app.logger.error('Erro ao apagar imagem da denúncia: %s', e)
+
+    db.session.delete(denuncia)
+    db.session.commit()
+    return jsonify({'message': 'Denúncia excluída'})
 
 @app.route('/api/stats')
 def stats():
