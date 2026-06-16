@@ -178,6 +178,10 @@ def upload_file_to_storage(file_obj, key, content_type=None):
         app.logger.error('Erro ao salvar arquivo localmente: %s', e)
         raise
 
+def get_uploaded_file(field_name):
+    files = request.files.getlist(field_name)
+    return next((file for file in files if file and file.filename), None)
+
 def delete_storage_object_by_url(url_or_filename):
     """
     Remove o arquivo do bucket se for uma URL, ou do disco local se for apenas o nome do arquivo.
@@ -469,25 +473,24 @@ def registros():
                 return jsonify({'error': 'Nome da espécie obrigatório'}), 400
             
             img_path = None
-            if 'img' in request.files:
-                file = request.files['img']
-                if file and file.filename:
-                    file.seek(0, os.SEEK_END)
-                    file_size = file.tell()
-                    file.seek(0)
-                    
-                    if file_size > 50 * 1024 * 1024:
-                        return jsonify({'error': 'Imagem muito grande. O tamanho máximo permitido é 50MB.'}), 413
-                    
-                    filename = secure_filename(file.filename)
-                    filename = f"registro_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                    
-                    key = f'registros/{filename}'
-                    try:
-                        img_path = upload_file_to_storage(file, key, content_type=file.content_type)
-                    except Exception as e:
-                        print(f'Erro ao salvar imagem: {e}')
-                        return jsonify({'error': 'Erro ao salvar imagem'}), 500
+            file = get_uploaded_file('img')
+            if file:
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)
+                
+                if file_size > 50 * 1024 * 1024:
+                    return jsonify({'error': 'Imagem muito grande. O tamanho máximo permitido é 50MB.'}), 413
+                
+                filename = secure_filename(file.filename)
+                filename = f"registro_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
+                
+                key = f'registros/{filename}'
+                try:
+                    img_path = upload_file_to_storage(file, key, content_type=file.content_type)
+                except Exception as e:
+                    print(f'Erro ao salvar imagem: {e}')
+                    return jsonify({'error': 'Erro ao salvar imagem'}), 500
                         
             registro = Registro(especie=especie, tipo=tipo, local=local, desc=desc, img=img_path, lat=lat, lng=lng, usuario_id=usuario_id)
             db.session.add(registro)
@@ -538,25 +541,24 @@ def denuncias():
             return jsonify({'error': 'Dados obrigatórios faltando'}), 400
 
         img_path = None
-        if 'img' in request.files:
-            file = request.files['img']
-            if file and file.filename:
-                file.seek(0, os.SEEK_END)
-                file_size = file.tell()
-                file.seek(0)
+        file = get_uploaded_file('img')
+        if file:
+            file.seek(0, os.SEEK_END)
+            file_size = file.tell()
+            file.seek(0)
 
-                if file_size > 50 * 1024 * 1024:
-                    return jsonify({'error': 'Imagem muito grande. O tamanho máximo permitido é 50MB.'}), 413
+            if file_size > 50 * 1024 * 1024:
+                return jsonify({'error': 'Imagem muito grande. O tamanho máximo permitido é 50MB.'}), 413
 
-                filename = secure_filename(file.filename)
-                filename = f"denuncia_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                
-                key = f'denuncias/{filename}'
-                try:
-                    img_path = upload_file_to_storage(file, key, content_type=file.content_type)
-                except Exception as e:
-                    print(f'Erro ao enviar imagem da denúncia: {e}')
-                    return jsonify({'error': 'Erro ao salvar imagem da denúncia'}), 500
+            filename = secure_filename(file.filename)
+            filename = f"denuncia_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
+            
+            key = f'denuncias/{filename}'
+            try:
+                img_path = upload_file_to_storage(file, key, content_type=file.content_type)
+            except Exception as e:
+                print(f'Erro ao enviar imagem da denúncia: {e}')
+                return jsonify({'error': 'Erro ao salvar imagem da denúncia'}), 500
 
         denuncia = Denuncia(tipo=tipo, desc=desc, local=local, gravidade=gravidade, lat=lat, lng=lng, usuario_id=usuario_id, img=img_path)
         db.session.add(denuncia)

@@ -1277,7 +1277,20 @@ document.getElementById('registro-form').addEventListener('submit', async e => {
   }
   
   console.log('Enviando registro...', state.user);
-  const formData = new FormData(e.target);
+  const formData = new FormData();
+  const selectedFile =
+    document.getElementById('gallery-file-input')?.files?.[0] ||
+    document.getElementById('camera-file-input')?.files?.[0];
+
+  formData.append('especie', document.getElementById('reg-especie').value.trim());
+  formData.append('tipo', document.getElementById('reg-tipo').value);
+  formData.append('local', document.getElementById('reg-local').value.trim());
+  formData.append('lat', document.getElementById('reg-lat').value.trim());
+  formData.append('lng', document.getElementById('reg-lng').value.trim());
+  formData.append('desc', document.getElementById('reg-desc').value.trim());
+  if (selectedFile) {
+    formData.append('img', selectedFile);
+  }
   formData.append('usuario_id', state.user.id);
   
   // Debug: mostrar dados sendo enviados
@@ -1297,6 +1310,8 @@ document.getElementById('registro-form').addEventListener('submit', async e => {
       document.getElementById('preview-img').style.display = 'none';
       document.getElementById('upload-text').style.display = 'block';
       loadRegistros();
+      loadGaleria();
+      loadCommunityFeed();
     } else {
       toast(data.error || 'Erro no servidor', 'error');
     }
