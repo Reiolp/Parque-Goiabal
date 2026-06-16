@@ -121,7 +121,7 @@ print(f"🔧 STORAGE_ENABLED: {STORAGE_ENABLED}")
 print(f"🔧 EXTERNAL_STORAGE_ENABLED: {EXTERNAL_STORAGE_ENABLED}")
 
 if not EXTERNAL_STORAGE_ENABLED:
-    app.logger.warning('Nenhum storage externo configurado. Uploads de imagens falharão no deploy. Defina SPACES_BUCKET/AWS_S3_BUCKET/DO_SPACES_BUCKET ou SUPABASE_STORAGE_BUCKET.')
+    app.logger.warning('Nenhum storage externo configurado. Os arquivos serão salvos localmente na pasta /uploads.')
 
 def get_supabase_public_url(key):
     if not SUPABASE_URL or not SUPABASE_STORAGE_BUCKET:
@@ -129,6 +129,11 @@ def get_supabase_public_url(key):
     return f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/{key}"
 
 def upload_file_to_storage(file_obj, key, content_type=None):
+    """
+    Tenta fazer o upload para o Supabase ou S3/Spaces. 
+    Se nenhum estiver configurado, salva o arquivo localmente no servidor.
+    """
+    # 1. Tentativa com Supabase
     if SUPABASE_STORAGE_ENABLED:
         try:
             if hasattr(file_obj, 'seek'):
@@ -137,46 +142,79 @@ def upload_file_to_storage(file_obj, key, content_type=None):
             result = SUPABASE_CLIENT.storage.from_(SUPABASE_STORAGE_BUCKET).upload(key, file_data, content_type=content_type)
             if isinstance(result, dict) and result.get('error'):
                 raise Exception(result.get('error'))
-            public_url = get_supabase_public_url(key)
-            return public_url
+            return get_supabase_public_url(key)
         except Exception as e:
-            app.logger.error('Supabase storage upload error: %s', e)
+            app.logger.error('Erro de upload no Supabase Storage: %s', e)
             raise
 
-    if not STORAGE_ENABLED:
-        raise RuntimeError('Storage externo não configurado. Defina SPACES_BUCKET/DO_SPACES_BUCKET/AWS_S3_BUCKET com credenciais ou configure Supabase storage.')
+    # 2. Tentativa com S3 / DigitalOcean Spaces
+    if STORAGE_ENABLED:
+        extra_args = {}
+        if STORAGE_PUBLIC:
+            extra_args['ACL'] = 'public-read'
+        if content_type:
+            extra_args['ContentType'] = content_type
+        try:
+            if hasattr(file_obj, 'seek'):
+                file_obj.seek(0)
+            s3_client.upload_fileobj(file_obj, STORAGE_BUCKET, key, ExtraArgs=extra_args)
+            return f"{STORAGE_BASE_URL}/{key}"
+        except ClientError as e:
+            app.logger.error('Erro de upload no S3/Spaces Storage: %s', e)
+            raise
 
-    extra_args = {}
-    if STORAGE_PUBLIC:
-        extra_args['ACL'] = 'public-read'
-    if content_type:
-        extra_args['ContentType'] = content_type
+    # 3. Fallback: Armazenamento Local (Caso não haja bucket ativo)
     try:
-        s3_client.upload_fileobj(file_obj, STORAGE_BUCKET, key, ExtraArgs=extra_args)
-    except ClientError as e:
-        app.logger.error('Storage upload error: %s', e)
+        filename = os.path.basename(key)
+        local_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+        
+        if hasattr(file_obj, 'seek'):
+            file_obj.seek(0)
+            
+        file_obj.save(local_path)
+        app.logger.info(f'Arquivo salvo localmente com sucesso: {local_path}')
+        return filename
+    except Exception as e:
+        app.logger.error('Erro ao salvar arquivo localmente: %s', e)
         raise
-    return f"{STORAGE_BASE_URL}/{key}"
 
-def delete_storage_object_by_url(url):
-    if SUPABASE_STORAGE_ENABLED and SUPABASE_URL and SUPABASE_STORAGE_BUCKET and url:
+def delete_storage_object_by_url(url_or_filename):
+    """
+    Remove o arquivo do bucket se for uma URL, ou do disco local se for apenas o nome do arquivo.
+    """
+    if not url_or_filename:
+        return
+
+    # Se não for uma URL da internet, assume que é um arquivo local da pasta uploads
+    if not url_or_filename.startswith('http://') and not url_or_filename.startswith('https://'):
+        try:
+            local_path = os.path.join(app.config['UPLOAD_FOLDER'], url_or_filename)
+            if os.path.exists(local_path):
+                os.remove(local_path)
+                app.logger.info(f'Arquivo local deletado: {local_path}')
+        except OSError as e:
+            app.logger.error('Erro ao deletar arquivo local: %s', e)
+        return
+
+    # Deletar do Supabase
+    if SUPABASE_STORAGE_ENABLED and SUPABASE_URL and SUPABASE_STORAGE_BUCKET:
         try:
             prefix = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_STORAGE_BUCKET}/"
-            if url.startswith(prefix):
-                key = url[len(prefix):]
+            if url_or_filename.startswith(prefix):
+                key = url_or_filename[len(prefix):]
                 SUPABASE_CLIENT.storage.from_(SUPABASE_STORAGE_BUCKET).remove([key])
                 return
         except Exception as e:
-            app.logger.error('Supabase storage delete error: %s', e)
+            app.logger.error('Erro ao deletar no Supabase Storage: %s', e)
             return
-    if not STORAGE_ENABLED or not url:
-        return
-    if STORAGE_BASE_URL and url.startswith(STORAGE_BASE_URL):
-        key = url[len(STORAGE_BASE_URL) + 1:]
+
+    # Deletar do S3/Spaces
+    if STORAGE_ENABLED and STORAGE_BASE_URL and url_or_filename.startswith(STORAGE_BASE_URL):
+        key = url_or_filename[len(STORAGE_BASE_URL) + 1:]
         try:
             s3_client.delete_object(Bucket=STORAGE_BUCKET, Key=key)
         except ClientError as e:
-            app.logger.error('Storage delete error: %s', e)
+            app.logger.error('Erro ao deletar no S3/Spaces Storage: %s', e)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -260,13 +298,9 @@ def index():
 def health():
     return jsonify({'status': 'ok', 'message': 'Servidor está funcionando!'}), 200
 
-
 @app.route('/api/s3_check', methods=['GET'])
 @app.route('/api/storage_check', methods=['GET'])
 def storage_check():
-    """Verifica se a configuração de armazenamento externo está ativa e tenta acessar o bucket.
-    Use para validar que as variáveis de ambiente foram configuradas corretamente.
-    """
     if SUPABASE_STORAGE_ENABLED:
         return jsonify({
             'storage_enabled': True,
@@ -276,9 +310,8 @@ def storage_check():
             'ok': True
         }), 200
     if not STORAGE_ENABLED:
-        return jsonify({'storage_enabled': False, 'message': 'Armazenamento externo não está configurado (bucket ou credenciais ausentes)'}), 200
+        return jsonify({'storage_enabled': False, 'message': 'Armazenamento externo não está configurado (rodando localmente via fallback)'}), 200
     try:
-        # tenta head_bucket para verificar permissões
         s3_client.head_bucket(Bucket=STORAGE_BUCKET)
         return jsonify({
             'storage_enabled': True,
@@ -306,8 +339,6 @@ def register():
         print(f"\n{'='*60}")
         print(f"📝 Nova requisição de registro")
         print(f"{'='*60}")
-        print(f"Content-Type: {request.content_type}")
-        print(f"Form data: {dict(request.form)}")
         
         nome = request.form.get('nome')
         sobrenome = request.form.get('sobrenome', '')
@@ -315,49 +346,34 @@ def register():
         senha = request.form.get('senha')
         tipo = request.form.get('tipo')
         
-        print(f"\nDados recebidos:")
-        print(f"  Nome: {nome}")
-        print(f"  Email: {email}")
-        print(f"  Tipo: {tipo}")
-        
         if not nome or not email or not senha or len(senha) < 6:
-            print(f"❌ Validação falhou: dados inválidos")
             return jsonify({'error': 'Dados inválidos'}), 400
         if tipo == 'admin':
-            print(f"❌ Tipo admin não permitido")
             return jsonify({'error': 'Registro de administrador não permitido via site'}), 403
         if User.query.filter_by(email=email).first():
-            print(f"❌ E-mail {email} já cadastrado")
             return jsonify({'error': 'E-mail já cadastrado'}), 400
         
         foto_path = None
         if 'foto' in request.files:
             file = request.files['foto']
             if file and file.filename:
-                print(f"📸 Processando foto: {file.filename}")
-                # Verificar tamanho do arquivo (50MB máximo para fotos de perfil)
                 file.seek(0, os.SEEK_END)
                 file_size = file.tell()
                 file.seek(0)
                 
                 if file_size > 50 * 1024 * 1024:
-                    print(f"❌ Foto muito grande: {file_size} bytes")
                     return jsonify({'error': 'Foto de perfil muito grande. O tamanho máximo permitido é 50MB.'}), 413
                 
                 filename = secure_filename(file.filename)
                 filename = f"profile_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                if EXTERNAL_STORAGE_ENABLED:
-                    key = f'profiles/{filename}'
-                    try:
-                        foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
-                        print(f"✓ Foto enviada para storage: {foto_path}")
-                    except Exception as e:
-                        print(f'❌ Erro ao enviar foto para storage: {e}')
-                        return jsonify({'error': 'Erro ao salvar foto de perfil'}), 500
-                else:
-                    return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
+                
+                key = f'profiles/{filename}'
+                try:
+                    foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
+                except Exception as e:
+                    print(f'❌ Erro ao salvar foto de perfil: {e}')
+                    return jsonify({'error': 'Erro ao salvar foto de perfil'}), 500
 
-        print(f"\n🔐 Criando hash de senha...")
         hashed_senha = generate_password_hash(senha)
         user = User(nome=nome, sobrenome=sobrenome, email=email, senha=hashed_senha, tipo=tipo, foto=foto_path)
         db.session.add(user)
@@ -365,22 +381,10 @@ def register():
         
         foto_url = None
         if foto_path:
-            if isinstance(foto_path, str) and foto_path.startswith('http'):
-                foto_url = foto_path
-            else:
-                foto_url = f'/uploads/{os.path.basename(foto_path)}'
-        
-        print(f"✅ Usuário criado com sucesso!")
-        print(f"   ID: {user.id}")
-        print(f"   Email: {user.email}")
-        print(f"{'='*60}\n")
+            foto_url = foto_path if foto_path.startswith('http') else f'/uploads/{foto_path}'
         
         return jsonify({'user': {'id': user.id, 'nome': user.nome, 'email': user.email, 'tipo': user.tipo, 'foto': foto_url}})
     except Exception as e:
-        import traceback
-        print(f'❌ ERRO NO REGISTRO: {e}')
-        print(f'Traceback:\n{traceback.format_exc()}')
-        print(f"{'='*60}\n")
         return jsonify({'error': f'Erro ao criar conta: {str(e)}'}), 500
 
 @app.route('/api/login', methods=['POST'])
@@ -397,10 +401,7 @@ def login():
         return jsonify({'error': 'Credenciais inválidas'}), 401
     foto_url = None
     if user.foto:
-        if isinstance(user.foto, str) and user.foto.startswith('http'):
-            foto_url = user.foto
-        else:
-            foto_url = f'/uploads/{os.path.basename(user.foto)}'
+        foto_url = user.foto if user.foto.startswith('http') else f'/uploads/{user.foto}'
     return jsonify({'user': {'id': user.id, 'nome': user.nome, 'email': user.email, 'tipo': user.tipo, 'foto': foto_url}})
 
 @app.route('/api/atualizar-foto', methods=['POST'])
@@ -420,7 +421,6 @@ def atualizar_foto():
         if not file or not file.filename:
             return jsonify({'error': 'Arquivo inválido'}), 400
         
-        # Validar tamanho
         file.seek(0, os.SEEK_END)
         file_size = file.tell()
         file.seek(0)
@@ -428,37 +428,26 @@ def atualizar_foto():
         if file_size > 50 * 1024 * 1024:
             return jsonify({'error': 'Foto muito grande. O tamanho máximo permitido é 50MB.'}), 413
         
-        # Deletar foto antiga se existir
-        if user.foto and not user.foto.startswith('http'):
-            try:
-                os.remove(user.foto)
-            except OSError:
-                pass
-        elif user.foto and STORAGE_ENABLED and STORAGE_BASE_URL and user.foto.startswith(STORAGE_BASE_URL):
+        # Deleta a foto antiga se existir (funciona tanto para URL externa quanto arquivo local)
+        if user.foto:
             delete_storage_object_by_url(user.foto)
         
-        # Salvar nova foto
         filename = secure_filename(file.filename)
         filename = f"profile_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
         
-        if EXTERNAL_STORAGE_ENABLED:
-            key = f'perfis/{filename}'
-            try:
-                foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
-            except Exception as e:
-                print(f'Erro ao enviar foto para storage: {e}')
-                return jsonify({'error': 'Erro ao salvar foto'}), 500
-        else:
-            return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
+        key = f'perfis/{filename}'
+        try:
+            foto_path = upload_file_to_storage(file, key, content_type=file.content_type)
+        except Exception as e:
+            print(f'Erro ao enviar foto para storage: {e}')
+            return jsonify({'error': 'Erro ao salvar foto'}), 500
         
         user.foto = foto_path
         db.session.commit()
         
-        foto_url = f'/uploads/{os.path.basename(foto_path)}' if not foto_path.startswith('http') else foto_path
-        
-        return jsonify({'message': 'Foto atualizada com sucesso', 'foto_url': foto_url}), 200
+        foto_url = user.foto if user.foto.startswith('http') else f'/uploads/{user.foto}'
+        return jsonify({'message': 'Foto updated com sucesso', 'foto_url': foto_url}), 200
     except Exception as e:
-        print(f"Erro ao atualizar foto: {e}")
         return jsonify({'error': f'Erro interno do servidor: {str(e)}'}), 500
 
 @app.route('/api/registros', methods=['GET', 'POST'])
@@ -478,11 +467,11 @@ def registros():
             lng = float(lng_str) if lng_str and lng_str.strip() else None
             if not especie:
                 return jsonify({'error': 'Nome da espécie obrigatório'}), 400
+            
             img_path = None
             if 'img' in request.files:
                 file = request.files['img']
                 if file and file.filename:
-                    # Verificar tamanho do arquivo (50MB máximo)
                     file.seek(0, os.SEEK_END)
                     file_size = file.tell()
                     file.seek(0)
@@ -492,39 +481,30 @@ def registros():
                     
                     filename = secure_filename(file.filename)
                     filename = f"registro_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                    if EXTERNAL_STORAGE_ENABLED:
-                        key = f'registros/{filename}'
-                        try:
-                            img_path = upload_file_to_storage(file, key, content_type=file.content_type)
-                        except Exception as e:
-                            print(f'Erro ao enviar imagem para storage: {e}')
-                            return jsonify({'error': 'Erro ao salvar imagem'}), 500
-                    else:
-                        return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
+                    
+                    key = f'registros/{filename}'
+                    try:
+                        img_path = upload_file_to_storage(file, key, content_type=file.content_type)
+                    except Exception as e:
+                        print(f'Erro ao salvar imagem: {e}')
+                        return jsonify({'error': 'Erro ao salvar imagem'}), 500
+                        
             registro = Registro(especie=especie, tipo=tipo, local=local, desc=desc, img=img_path, lat=lat, lng=lng, usuario_id=usuario_id)
             db.session.add(registro)
             db.session.commit()
             return jsonify({'message': 'Registro criado'})
         except Exception as e:
-            print(f"Erro ao criar registro: {e}")
             return jsonify({'error': f'Erro interno do servidor: {str(e)}'}), 500
     else:
         regs = Registro.query.options(joinedload(Registro.user)).all()
         result = []
         for r in regs:
-            # normalize img and usuario_foto to public URLs
             img_url = None
             if r.img:
-                if isinstance(r.img, str) and r.img.startswith('http'):
-                    img_url = r.img
-                else:
-                    img_url = f'/uploads/{os.path.basename(r.img)}'
+                img_url = r.img if r.img.startswith('http') else f'/uploads/{r.img}'
             usuario_foto_url = None
             if r.user and r.user.foto:
-                if isinstance(r.user.foto, str) and r.user.foto.startswith('http'):
-                    usuario_foto_url = r.user.foto
-                else:
-                    usuario_foto_url = f'/uploads/{os.path.basename(r.user.foto)}'
+                usuario_foto_url = r.user.foto if r.user.foto.startswith('http') else f'/uploads/{r.user.foto}'
             result.append({
                 'id': r.id,
                 'especie': r.especie,
@@ -570,15 +550,13 @@ def denuncias():
 
                 filename = secure_filename(file.filename)
                 filename = f"denuncia_{datetime.utcnow().strftime('%Y%m%d%H%M%S%f')}_{filename}"
-                if EXTERNAL_STORAGE_ENABLED:
-                    key = f'denuncias/{filename}'
-                    try:
-                        img_path = upload_file_to_storage(file, key, content_type=file.content_type)
-                    except Exception as e:
-                        print(f'Erro ao enviar imagem da denúncia para storage: {e}')
-                        return jsonify({'error': 'Erro ao salvar imagem da denúncia'}), 500
-                else:
-                    return jsonify({'error': 'Storage externo não configurado. Configure um bucket S3/Spaces ou Supabase storage.'}), 500
+                
+                key = f'denuncias/{filename}'
+                try:
+                    img_path = upload_file_to_storage(file, key, content_type=file.content_type)
+                except Exception as e:
+                    print(f'Erro ao enviar imagem da denúncia: {e}')
+                    return jsonify({'error': 'Erro ao salvar imagem da denúncia'}), 500
 
         denuncia = Denuncia(tipo=tipo, desc=desc, local=local, gravidade=gravidade, lat=lat, lng=lng, usuario_id=usuario_id, img=img_path)
         db.session.add(denuncia)
@@ -593,10 +571,7 @@ def denuncias():
         for d in dens:
             img_url = None
             if d.img:
-                if isinstance(d.img, str) and d.img.startswith('http'):
-                    img_url = d.img
-                else:
-                    img_url = f'/uploads/{os.path.basename(d.img)}'
+                img_url = d.img if d.img.startswith('http') else f'/uploads/{d.img}'
             result.append({
                 'id': d.id,
                 'tipo': d.tipo,
@@ -640,6 +615,11 @@ def imagens():
     
     result = []
     for r in regs:
+        img_url = r.img if r.img.startswith('http') else f'/uploads/{r.img}'
+        usuario_foto_url = None
+        if r.usuario_foto:
+            usuario_foto_url = r.usuario_foto if r.usuario_foto.startswith('http') else f'/uploads/{r.usuario_foto}'
+            
         result.append({
             'id': r.id,
             'usuario_id': r.usuario_id,
@@ -647,12 +627,12 @@ def imagens():
             'tipo': r.tipo,
             'local': r.local,
             'desc': r.desc,
-            'img': f'/uploads/{os.path.basename(r.img)}' if r.img else None,
+            'img': img_url,
             'lat': r.lat,
             'lng': r.lng,
             'data': r.data.strftime('%d/%m/%Y'),
             'usuario': r.usuario,
-            'usuario_foto': f'/uploads/{os.path.basename(r.usuario_foto)}' if r.usuario_foto else None
+            'usuario_foto': usuario_foto_url
         })
     return jsonify(result)
 
@@ -670,22 +650,15 @@ def delete_imagem(registro_id):
     if not registro:
         return jsonify({'error': 'Registro não encontrado'}), 404
 
-    # Permitir exclusão se for admin ou se for o dono da imagem
     if user.tipo != 'admin' and registro.usuario_id != usuario_id:
         return jsonify({'error': 'Acesso negado'}), 403
 
     if registro.img:
-        # se imagem estiver no storage externo (URL), delete do storage, caso contrário delete arquivo local
         try:
-            if STORAGE_ENABLED and isinstance(registro.img, str) and STORAGE_BASE_URL and registro.img.startswith(STORAGE_BASE_URL):
-                delete_storage_object_by_url(registro.img)
-            else:
-                try:
-                    os.remove(registro.img)
-                except OSError:
-                    pass
+            delete_storage_object_by_url(registro.img)
         except Exception as e:
             app.logger.error('Erro ao apagar imagem associada: %s', e)
+            
     db.session.delete(registro)
     db.session.commit()
     return jsonify({'message': 'Registro excluído'})
@@ -694,8 +667,7 @@ def delete_imagem(registro_id):
 def uploaded_file(filename):
     from flask import make_response
     response = make_response(send_from_directory(app.config['UPLOAD_FOLDER'], filename))
-    # Permitir cache longo (30 dias) já que os nomes de arquivo são únicos com timestamp
-    response.cache_control.max_age = 2592000  # 30 dias em segundos
+    response.cache_control.max_age = 2592000  # 30 dias de cache
     response.cache_control.public = True
     return response
 
