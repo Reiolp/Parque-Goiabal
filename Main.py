@@ -624,7 +624,7 @@ def stats():
 
 @app.route('/api/imagens')
 def imagens():
-    regs = Registro.query.filter(Registro.img.isnot(None)).join(User).add_columns(
+    regs = Registro.query.filter(Registro.img.isnot(None)).outerjoin(User, Registro.usuario_id == User.id).add_columns(
         Registro.id, Registro.especie, Registro.tipo, Registro.local, Registro.desc, Registro.img, Registro.lat, Registro.lng, Registro.data, Registro.usuario_id,
         User.nome.label('usuario'), User.foto.label('usuario_foto')
     ).order_by(Registro.data.desc()).all()
@@ -647,7 +647,7 @@ def imagens():
             'lat': r.lat,
             'lng': r.lng,
             'data': r.data.strftime('%d/%m/%Y'),
-            'usuario': r.usuario,
+            'usuario': r.usuario or 'Usuário da comunidade',
             'usuario_foto': usuario_foto_url
         })
     return jsonify(result)

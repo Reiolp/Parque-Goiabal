@@ -859,14 +859,11 @@ let galleryMarkers = [];
 const STORAGE_KEY = 'parquegoiabal_user';
 const FEATURED_IMAGE_KEY = 'galleryFeaturedImageId';
 const DEFAULT_API_BASE_URL = 'http://127.0.0.1:5000';
-const PRODUCTION_API_BASE_URL = 'https://parquegoiabal.onrender.com';
 const API_BASE_URL = window.location.protocol === 'file:'
   ? DEFAULT_API_BASE_URL
-  : (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    ? window.location.origin
-    : PRODUCTION_API_BASE_URL;
+  : window.location.origin;
 // Quando aberto direto do sistema de arquivos (file://), ele usa o servidor local.
-// Em localhost, usa o servidor local. No GitHub Pages, usa o backend público.
+// Em localhost/Railway/produção, usa o mesmo domínio em que o site está aberto.
 
 function apiUrl(path) {
   return `${API_BASE_URL}${path}`;
