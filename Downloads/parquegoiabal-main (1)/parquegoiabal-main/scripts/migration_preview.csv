@@ -1,0 +1,5 @@
+filename,local_path,s3_key,s3_url,exists_on_s3,action
+IMG_2770_2.jpg,C:\Users\luiso\OneDrive\Documentos\GitHub\parquegoiabal\uploads\IMG_2770_2.jpg,uploads/IMG_2770_2.jpg,https://parquegoiabal-uploads.s3.sa-east-1.amazonaws.com/uploads/IMG_2770_2.jpg,unknown,would upload
+IMG_7706.jpg,C:\Users\luiso\OneDrive\Documentos\GitHub\parquegoiabal\uploads\IMG_7706.jpg,uploads/IMG_7706.jpg,https://parquegoiabal-uploads.s3.sa-east-1.amazonaws.com/uploads/IMG_7706.jpg,unknown,would upload
+profile_IMG_2770_2.jpg,C:\Users\luiso\OneDrive\Documentos\GitHub\parquegoiabal\uploads\profile_IMG_2770_2.jpg,uploads/profile_IMG_2770_2.jpg,https://parquegoiabal-uploads.s3.sa-east-1.amazonaws.com/uploads/profile_IMG_2770_2.jpg,unknown,would upload
+registro_20260520000458862563_boitata.jpg,C:\Users\luiso\OneDrive\Documentos\GitHub\parquegoiabal\uploads\registro_20260520000458862563_boitata.jpg,uploads/registro_20260520000458862563_boitata.jpg,https://parquegoiabal-uploads.s3.sa-east-1.amazonaws.com/uploads/registro_20260520000458862563_boitata.jpg,unknown,would upload

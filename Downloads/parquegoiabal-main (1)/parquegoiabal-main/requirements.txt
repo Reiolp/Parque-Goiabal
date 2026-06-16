@@ -1,0 +1,8 @@
+Flask>=2.2
+Flask-SQLAlchemy>=3.0
+Flask-Cors>=3.0
+gunicorn>=20.0
+Werkzeug>=2.2
+boto3>=1.26
+supabase>=1.0.0
+psycopg2-binary>=2.9

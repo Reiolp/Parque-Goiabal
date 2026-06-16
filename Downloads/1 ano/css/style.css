@@ -1,0 +1,1076 @@
+
+    /* RESET GLOBAL - Remove margens, paddings padrão e define box-sizing para todos elementos */
+    *{margin:0;padding:0;box-sizing:border-box;}
+    
+    /* ====================================================== */
+    /* OTIMIZAÇÕES REALIZADAS:                               */
+    /* - Blocos CSS não utilizados foram comentados          */
+    /* - Vendor prefixes webkit comentados                   */  
+    /* - Duplicações de media queries consolidadas           */
+    /* - Animações @keyframes duplicadas removidas           */
+    /* - Comentários extensos de JS removidos do CSS         */
+    /* ====================================================== */
+    
+    /* ======================== */
+    /* NETFLIX INTRO ANIMATION */
+    /* ======================== */
+    
+    /* CONTAINER DA INTRODUÇÃO NETFLIX - Tela cheia fixa que cobre toda a viewport durante a animação */
+    .netflix-intro-container {
+        position: fixed; /* Fixa na tela para cobrir todo conteúdo */
+        top: 0;
+        left: 0;
+        width: 100vw; /* Largura total da viewport */
+        height: 100vh; /* Altura total da viewport */
+        background: #000000; /* Fundo preto como Netflix */
+        display: flex;
+        align-items: center;
+        justify-content: center; /* Centraliza o logo */
+        z-index: 10000; /* Z-index alto para ficar sobre todo conteúdo */
+        overflow: hidden; /* Esconde elementos que excedem o container */
+        will-change: opacity;
+        transform: translateZ(0);
+        /* VENDOR PREFIXES - webkit pode ser removido para navegadores modernos */
+        /* -webkit-backface-visibility: hidden; */
+        backface-visibility: hidden;
+        /* -webkit-perspective: 1000px; */
+        perspective: 1000px;
+    }
+    
+    /* LOGO NETFLIX - Container do "N" com otimizações de performance para animação */
+    .netflix-logo {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transform: translateZ(0); /* Força aceleração de hardware */
+        will-change: transform; /* Otimização para animações */
+    }
+    
+    /* EFEITO DE BRILHO - Pseudo-elemento para criar halo luminoso atrás do logo */
+    .netflix-logo::before {
+        content: '';
+        position: absolute;
+        width: 300px;
+        height: 300px;
+        background: radial-gradient(circle, rgba(229, 9, 20, 0.15) 0%, rgba(229, 9, 20, 0.05) 40%, transparent 70%);
+        border-radius: 50%; /* Círculo perfeito */
+        opacity: 0; /* Invisível inicialmente */
+        transform: scale3d(0.5, 0.5, 1); /* Começa pequeno */
+        will-change: transform, opacity; /* Otimização para animação */
+        z-index: -1; /* Fica atrás do logo */
+    }
+    
+    /* LETRA N NETFLIX - Estilização da letra "N" com efeitos visuais avançados */
+    .netflix-n {
+        font-family: 'Helvetica Neue', Arial, sans-serif;
+        font-size: 8rem; /* Tamanho grande e impactante */
+        font-weight: 900; /* Extra bold */
+        color: #E50914; /* Vermelho característico Netflix */
+        text-shadow: 0 0 8px rgba(229, 9, 20, 0.15); /* Brilho sutil */
+        opacity: 0; /* Começa invisível */
+        transform: scale3d(0.85, 0.85, 1); /* Começa ligeiramente menor */
+        position: relative;
+        letter-spacing: -0.08em; /* Espaçamento entre letras ajustado */
+        line-height: 0.9; /* Altura da linha compacta */
+        font-style: normal;
+        text-rendering: optimizeLegibility; /* Renderização otimizada */
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        filter: brightness(1.05) contrast(1.1) drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
+        will-change: transform, opacity, text-shadow;
+        backface-visibility: hidden;
+        perspective: 1000px;
+        /* VENDOR PREFIX - webkit-text-stroke pode ser removido se não suportar navegadores antigos */
+        /* -webkit-text-stroke: 0.5px rgba(139, 0, 0, 0.3); */
+    }
+    
+    /* INÍCIO DA ANIMAÇÃO - Aplica animação à letra N quando classe é adicionada */
+    .netflix-intro-container.start-animation .netflix-n {
+        animation: netflix-intro-sequence 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    
+    /* ANIMAÇÃO DO BRILHO - Sincroniza efeito de brilho com a animação da letra */
+    .netflix-intro-container.start-animation .netflix-logo::before {
+        animation: netflix-glow-background 2.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    }
+    
+    /* DESVANECIMENTO FINAL - Animação de saída da intro Netflix */
+    .netflix-intro-container.fade-out {
+        animation: netflix-fade-out 0.5s ease-out forwards;
+        will-change: opacity, transform;
+    }
+    
+    /* ANIMAÇÃO DO BRILHO DE FUNDO - Keyframes para o efeito de halo luminoso */
+    @keyframes netflix-glow-background {
+        0% {
+            opacity: 0;
+            transform: scale3d(0.5, 0.5, 1); /* Inicia pequeno */
+        }
+        25% {
+            opacity: 0.3;
+            transform: scale3d(0.8, 0.8, 1); /* Cresce gradualmente */
+        }
+        50% {
+            opacity: 0.8; /* Pico de brilho no meio da animação */
+            transform: scale3d(1.2, 1.2, 1); /* Tamanho máximo */
+        }
+        75% {
+            opacity: 0.4;
+            transform: scale3d(1, 1, 1); /* Volta ao tamanho normal */
+        }
+        100% {
+            opacity: 0;
+            transform: scale3d(0.5, 0.5, 1); /* Desaparece */
+        }
+    }
+    
+    /* SEQUÊNCIA PRINCIPAL DA INTRO - Animação complexa da letra N com efeitos de brilho */
+    @keyframes netflix-intro-sequence {
+        0% {
+            opacity: 0; /* Inicia invisível */
+            transform: scale3d(0.85, 0.85, 1); /* Ligeiramente menor */
+            text-shadow: 
+                0 0 2px rgba(0, 0, 0, 0.8), /* Sombra preta */
+                0 0 0px rgba(229, 9, 20, 0); /* Sem brilho vermelho */
+        }
+        20% {
+            opacity: 0.6; /* Começa a aparecer */
+            transform: scale3d(0.92, 0.92, 1);
+            text-shadow: 
+                0 0 3px rgba(0, 0, 0, 0.6),
+                0 0 10px rgba(229, 9, 20, 0.3), /* Brilho vermelho sutil */
+                0 0 20px rgba(229, 9, 20, 0.1);
+        }
+        40% {
+            opacity: 1; /* Totalmente visível */
+            transform: scale3d(1.02, 1.02, 1); /* Ligeiramente maior */
+            text-shadow: 
+                0 0 4px rgba(0, 0, 0, 0.5),
+                0 0 15px rgba(229, 9, 20, 0.5), /* Brilho médio */
+                0 0 30px rgba(229, 9, 20, 0.3);
+        }
+        60% {
+            transform: scale3d(1.05, 1.05, 1); /* Tamanho máximo */
+            text-shadow: 
+                0 0 5px rgba(0, 0, 0, 0.4),
+                0 0 20px rgba(229, 9, 20, 0.7), /* Brilho máximo */
+                0 0 40px rgba(229, 9, 20, 0.4);
+        }
+        80% {
+            transform: scale3d(0.98, 0.98, 1); /* Começa a diminuir */
+            text-shadow: 
+                0 0 3px rgba(0, 0, 0, 0.5),
+                0 0 12px rgba(229, 9, 20, 0.4); /* Brilho reduzindo */
+        }
+        100% {
+            opacity: 0; /* Desaparece */
+            transform: scale3d(0.90, 0.90, 1);
+            text-shadow: 
+                0 0 2px rgba(0, 0, 0, 0.8),
+                0 0 0px rgba(229, 9, 20, 0); /* Sem brilho final */
+        }
+    }
+    
+    /* ANIMAÇÃO DE SAÍDA - Desvanecimento final da intro Netflix */
+    @keyframes netflix-fade-out {
+        0% {
+            opacity: 1;
+            transform: scale3d(1, 1, 1); /* Tamanho normal */
+        }
+        100% {
+            opacity: 0; /* Completamente invisível */
+            transform: scale3d(1, 1, 1); /* Mantém tamanho */
+        }
+    }
+    
+    /* CONTEÚDO PRINCIPAL - Estado inicial do conteúdo (oculto durante intro) */
+    .main-content {
+        opacity: 0; /* Inicia invisível */
+        transition: opacity 0.5s ease-in-out; /* Transição suave ao aparecer */
+    }
+    
+    /* RESPONSIVO INTRO 768px - Adaptação da intro Netflix para tablets */
+    @media (max-width: 768px) {
+        .netflix-n {
+            font-size: 5.5rem; /* Tamanho reduzido para tablets */
+        }
+        .netflix-logo::before {
+            width: 220px; /* Halo menor */
+            height: 220px;
+        }
+    }
+    
+    /* RESPONSIVO INTRO 480px - Adaptação para smartphones */
+    @media (max-width: 480px) {
+        .netflix-n {
+            font-size: 4.5rem; /* Ainda menor para phones */
+        }
+        .netflix-logo::before {
+            width: 180px;
+            height: 180px;
+        }
+    }
+    
+    /* RESPONSIVO INTRO 320px - Adaptação para telas muito pequenas */
+    @media (max-width: 320px) {
+        .netflix-n {
+            font-size: 3.8rem; /* Mínimo para legibilidade */
+        }
+        .netflix-logo::before {
+            width: 150px;
+            height: 150px;
+        }
+    }
+    
+    /* ====================== */
+    /* END NETFLIX INTRO     */
+    /* ====================== */
+    
+    /* SCROLL SUAVE - Permite transições suaves ao navegar entre seções */
+    html {
+        scroll-behavior: smooth;
+    }
+    
+    /* ESTILO BASE DO BODY - Fundo escuro estilo Netflix com tipografia padrão */
+    body{
+        background-color:#141414; /* Fundo cinza escuro do Netflix */
+        color:#fff; /* Texto branco */
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; /* Tipografia Netflix */
+        overflow-x: hidden; /* Remove scroll horizontal */
+        width: 100%; /* Garante largura total */
+    }
+    
+    /* CONTAINER PRINCIPAL - Remove overflow horizontal para evitar scroll lateral */
+    main{
+        width: 100%;
+        overflow-x: hidden;
+    }
+
+    /* CABEÇALHO FIXO - Header que permanece no topo durante o scroll com fundo semi-transparente */
+    header{
+        position:fixed; /* Fixa no topo da página */
+        top:0;
+        left:0;
+        width:100%;
+        z-index:1000; /* Fica sobre o conteúdo mas abaixo da intro Netflix */
+        background: rgba(0,0,0,0.8); /* Fundo preto semi-transparente */
+        height: auto;
+        min-height: 60px; /* Altura mínima para o header */
+    }
+    /* BARRA DE NAVEGAÇÃO - Layout flexbox do menu principal */
+    .navbar{
+        display:flex;
+        align-items:center; /* Alinha itens verticalmente no centro */
+        padding:15px 20px;
+        min-height: 60px;
+    }
+    /* LOGO NETFLIX - Imagem do logo com tamanho fixo */
+    .logo{
+        width:120px;
+    }
+    /* LINKS DE NAVEGAÇÃO - Menu horizontal com links para as seções */
+    .nav-links{
+        list-style:none; /* Remove bullets da lista */
+        display:flex;
+        margin-left:30px; /* Espaçamento do logo */
+    }
+    /* ITENS DO MENU - Espaçamento entre os links de navegação */
+    .nav-links li{
+        margin-right:20px;
+    }
+    /* ESTILO DOS LINKS - Aparência dos links do menu principal */
+    .nav-links a{
+        color:#fff;
+        text-decoration:none;
+        font-size:14px;
+        font-weight:500;
+    }
+    /* HOVER DOS LINKS - Efeito ao passar mouse sobre os links */
+    .nav-links a:hover{
+        color:#e5e5e5; /* Tom mais claro no hover */
+    }
+    /* BLOCO NÃO UTILIZADO - .right-menu não existe no HTML
+    .right-menu{
+        margin-left:auto;
+    }
+    .right-menu .login{
+        color:#fff;
+        text-decoration:none;
+        font-size:14px;
+        font-weight:500;
+    }
+    */
+
+    /* SEÇÃO HERO - Banner principal com imagem de fundo e sobreposição */
+    .hero{
+        position:relative;
+        margin-top:70px; /* Compensa altura do header fixo */
+        /* Imagem de fundo para desktop */
+        background-image:url('../img/foto.png');
+        background-size:cover; /* Cobre toda a área */
+        background-position:center; /* Centraliza a imagem */
+        background-repeat: no-repeat;
+        min-height:80vh; /* 80% da altura da viewport */
+        width: calc(107%); /* Expande além do container */
+        margin-left: -20px; /* Efeito sangria */
+        margin-right: -20px;
+        overflow: hidden;
+    }
+    /* CÓDIGO COMENTADO REMOVIDO - era para <img> tag que foi substituída por background-image */
+    /* SOBREPOSIÇÃO DO HERO - Container dos botões sobre a imagem de fundo */
+    .hero-overlay{
+        position:absolute; /* Posiciona sobre a imagem */
+        bottom:40px; /* 40px do fundo */
+        left:4%;
+        right:4%;
+        max-width: calc(100% - 8%); /* Limita largura com margens */
+    }
+
+    /* BOTÕES MOBILE - Seção de botões fora da imagem para dispositivos móveis (inicialmente oculta) */
+    .hero-buttons-mobile{
+        display: none; /* Oculto por padrão, mostrado apenas no mobile */
+    }
+
+    /* GARANTIA DESKTOP - Assegura que botões mobile permaneçam ocultos no desktop */
+    @media(min-width: 769px){
+        .hero-buttons-mobile{
+            display: none !important;
+        }
+    }
+    /* TÍTULO PRINCIPAL - Estilização do título na sobreposição do hero */
+    .hero-overlay h1{
+        font-size:3rem;
+        margin-bottom:20px;
+    }
+    /* CONTAINER DOS BOTÕES - Layout flexbox para organizar botões lado a lado */
+    .buttons{
+        display:flex;
+        gap:10px; /* Espaçamento entre botões */
+    }
+    /* ESTILO BASE DOS BOTÕES - Aparência comum dos botões Play e Mais Informações */
+    .btn-play, .btn-info{
+        display:flex;
+        align-items:center; /* Alinha ícone e texto */
+        padding:10px 20px;
+        font-size:16px;
+        font-weight:600;
+        border:none;
+        border-radius:4px;
+        cursor:pointer;
+        transition:background 0.3s; /* Transição suave no hover */
+        text-transform:uppercase; /* Texto em maiúsculas */
+    }
+    /* BOTÃO PLAY - Estilo vermelho característico do Netflix */
+    .btn-play{
+        background:#e50914; /* Vermelho Netflix */
+        color:#fff;
+    }
+    /* HOVER BOTÃO PLAY - Efeito ao passar mouse sobre o botão play */
+    .btn-play:hover{
+        background:#f6121d; /* Vermelho mais claro */
+    }
+    /* BOTÃO INFO - Estilo cinza semi-transparente para informações */
+    .btn-info{
+        background: rgba(109,109,110,0.7); /* Cinza semi-transparente */
+        color:#fff;
+    }
+    /* HOVER BOTÃO INFO - Efeito de transparência no hover */
+    .btn-info:hover{
+        background: rgba(109,109,110,0.4); /* Mais transparente no hover */
+    }
+
+    /* MODAL DE INFORMAÇÕES 3D */
+    #info3DModal {
+        position: fixed;
+        inset: 0;
+        display: none;
+        background: rgba(0,0,0,0.72);
+        backdrop-filter: blur(4px);
+        justify-content: center;
+        align-items: center;
+        z-index: 2100;
+        perspective: 1200px;
+    }
+
+    #info3DModal.active {
+        display: flex;
+    }
+
+    .info-3d-card {
+        width: min(92vw, 520px);
+        background: linear-gradient(145deg, rgba(25,25,25,0.95), rgba(32,32,32,0.85));
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 18px;
+        box-shadow: 0 22px 40px rgba(0,0,0,0.45), 0 0 30px rgba(229,9,20,0.2);
+        padding: 24px;
+        transform-style: preserve-3d;
+        transform: translateZ(0) rotateX(14deg) rotateY(10deg);
+        animation: info-card-in 0.36s ease-out forwards;
+        color: #f3f3f3;
+        text-align: left;
+        line-height: 1.5;
+    }
+
+    #info3DModal.active .info-3d-card {
+        animation: info-card-in 0.36s ease-out forwards;
+    }
+
+    .info-3d-card:hover {
+        transform: translateZ(0) rotateX(0deg) rotateY(0deg);
+    }
+
+    .info-3d-card h3 {
+        margin-top: 0;
+        margin-bottom: 12px;
+        font-size: 1.45rem;
+        letter-spacing: 0.03em;
+    }
+
+    .info-3d-card p {
+        margin: 0;
+        color: #ddd;
+    }
+
+    .close-info-btn {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        border: 0;
+        background: rgba(0,0,0,0.5);
+        color: #fff;
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        cursor: pointer;
+        font-size: 1.1rem;
+        transition: transform 0.2s ease, background 0.2s ease;
+    }
+
+    .close-info-btn:hover {
+        background: rgba(255,255,255,0.18);
+        transform: scale(1.06);
+    }
+
+    @keyframes info-card-in {
+        0% {
+            opacity: 0;
+            transform: translateZ(-30px) rotateX(18deg) rotateY(14deg);
+        }
+        60% {
+            opacity: 1;
+            transform: translateZ(14px) rotateX(6deg) rotateY(4deg);
+        }
+        100% {
+            opacity: 1;
+            transform: translateZ(0) rotateX(0deg) rotateY(0deg);
+        }
+    }
+
+    /* ÍCONE PLAY - Estilização do ícone de play nos botões */
+    .play-icon{
+        margin-right:8px; /* Espaçamento do texto */
+        font-size:1.2rem;
+    }
+    /* ÍCONE INFO - Estilização do ícone de informações */
+    .info-icon{
+        margin-right:8px;
+        font-size:1.2rem;
+    }
+    /* MODAL DE VÍDEO - Overlay de tela cheia para reprodução de vídeos */
+    #videoModal {
+        position: fixed; /* Cobre toda a tela */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.8); /* Fundo escuro semi-transparente */
+        display: none; /* Oculto por padrão */
+        justify-content: center;
+        align-items: center;
+        z-index: 2000; /* Fica sobre todo conteúdo */
+        padding: 20px;
+    }
+    /* MODAL ATIVO - Estado visível do modal quando ativado */
+    #videoModal.active {
+        display: flex; /* Mostra o modal usando flexbox */
+    }
+    /* CONTEÚDO DO MODAL - Container centralizado para o vídeo */
+    #videoModal .modal-content {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        max-width: 95vw; /* Máximo 95% da largura da viewport */
+        max-height: 95vh; /* Máximo 95% da altura da viewport */
+    }
+    /* VÍDEO NO MODAL - Configurações responsivas do elemento de vídeo */
+    #videoModal video {
+        max-width: 95vw;
+        max-height: 95vh;
+        width: auto;
+        height: auto;
+        object-fit: contain; /* Mantém proporções sem distorcer */
+        outline: none; /* Remove outline ao focar */
+        background: #000; /* Fundo preto para áreas vazias */
+        border-radius: 8px; /* Bordas arredondadas */
+    }
+    /* VÍDEOS VERTICAIS - Otimização para vídeos formato Instagram (9:16) */
+    #videoModal video[data-orientation="vertical"],
+    #videoModal video:is([style*="aspect-ratio"]) {
+        width: auto;
+        height: 85vh; /* Altura controlada para desktop */
+        max-width: calc(85vh * 9 / 16); /* Proporção 9:16 exata */
+        object-fit: contain;
+    }
+    /* VÍDEOS HORIZONTAIS - Otimização para vídeos formato landscape (16:9) */
+    #videoModal video[data-orientation="horizontal"] {
+        width: 80vw; /* Largura controlada para desktop */
+        height: auto;
+        max-height: calc(80vw * 9 / 16); /* Proporção 16:9 exata */
+        object-fit: contain;
+    }
+    /* Detecção automática baseada em aspect-ratio */
+    @supports (aspect-ratio: 1) {
+        #videoModal video {
+            aspect-ratio: attr(width) / attr(height);
+        }
+    }
+
+    /* CSS para detecção automática de orientação baseada nas dimensões do vídeo */
+   
+    
+    /* CONSOLIDAÇÃO: Removendo duplicações - container queries fazem a mesma função que as media queries abaixo
+    CSS Container Queries para detectar automaticamente orientação do vídeo
+    */
+    /* @container (aspect-ratio > 1) {
+        #videoModal video {
+            width: 80vw;
+            height: auto;
+            max-height: calc(80vw * 9 / 16);
+            object-fit: contain;
+        }
+    }
+    
+    @container (aspect-ratio <= 1) {
+        #videoModal video {
+            width: auto;
+            height: 85vh;
+            max-width: calc(85vh * 9 / 16);
+            object-fit: contain;
+        }
+    } */
+    
+    /* Fallback usando media queries para navegadores sem container queries */
+    @media (orientation: portrait) and (min-width: 769px) {
+        #videoModal video:not([data-orientation]) {
+            /* Desktop em portrait - otimizado para vídeos verticais */
+            width: auto;
+            height: 85vh;
+            max-width: calc(85vh * 9 / 16);
+            object-fit: contain;
+        }
+    }
+    
+    @media (orientation: landscape) and (min-width: 769px) {
+        #videoModal video:not([data-orientation]) {
+            /* Desktop em landscape - otimizado para vídeos horizontais */
+            width: 80vw;
+            height: auto;
+            max-height: calc(80vw * 9 / 16);
+            object-fit: contain;
+        }
+    }
+
+    /* Regras específicas para desktop - previne esticamento */
+    @media (min-width: 1024px) {
+        #videoModal video {
+            /* Desktop - sempre usar contain para manter proporções */
+            object-fit: contain !important;
+        }
+        
+        /* Vídeos Instagram em desktop - formato 9:16 perfeito */
+        #videoModal video[data-orientation="vertical"] {
+            width: auto;
+            height: 80vh;
+            max-width: calc(80vh * 9 / 16);
+        }
+        
+        /* Vídeos horizontais em desktop */  
+        #videoModal video[data-orientation="horizontal"] {
+            width: 70vw;
+            height: auto;
+            max-height: calc(70vw * 9 / 16);
+        }
+        
+        /* Fallback para vídeos sem orientação definida em desktop */
+        #videoModal video:not([data-orientation]) {
+            width: auto;
+            height: 75vh;
+            max-width: calc(75vh * 9 / 16);
+        }
+    }
+
+    /* BOTÃO FECHAR MODAL - Botão X para fechar o vídeo */
+    #videoModal .close-btn {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(0, 0, 0, 0.6);
+        border: none;
+        color: #fff;
+        font-size: 18px;
+        padding: 8px 12px;
+        cursor: pointer;
+        border-radius: 50%; /* Formato circular */
+        width: 36px;
+        height: 36px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        opacity: 0.8;
+        transition: opacity 0.3s ease; /* Transição suave */
+        z-index: 2001; /* Fica sobre o vídeo */
+    }
+    /* HOVER BOTÃO FECHAR - Efeito ao passar mouse sobre o botão de fechar */
+    #videoModal .close-btn:hover {
+        opacity: 1;
+        background: rgba(0, 0, 0, 0.8); /* Fundo mais escuro no hover */
+    }
+/* RESPONSIVIDADE MOBILE - Adaptações para dispositivos com tela até 768px */
+@media(max-width:768px){
+    /* NAVBAR MOBILE - Layout da navegação adaptado para smartphones */
+    .navbar{
+        flex-direction:row;
+        justify-content:center; /* Centraliza conteúdo */
+        align-items:center;
+        padding:10px 15px;
+        flex-wrap: wrap; /* Permite quebra de linha se necessário */
+        gap: 20px; /* Espaçamento entre elementos */
+    }
+    /* LOGO MOBILE - Posicionamento fixo do logo no mobile */
+    .logo{
+        position: absolute;
+        left: 15px;
+        top: 50%;
+        transform: translateY(-50%); /* Centraliza verticalmente */
+        width:110px; /* Tamanho menor para mobile */
+        flex-shrink: 0; /* Não encolhe */
+    }
+    /* NAV-LINKS MOBILE - Menu horizontal centralizado */
+    .nav-links{
+        flex-wrap:nowrap;
+        margin-left:0;
+        justify-content:center; /* Centraliza links */
+        width:auto;
+        gap: 25px; /* Espaçamento entre links */
+        flex: 1;
+        display: flex;
+    }
+    /* RESET MARGIN - Remove margem dos itens de navegação no mobile */
+    .nav-links li{
+        margin-right:0;
+    }
+    /* HERO MOBILE - Seção principal adaptada para mobile */
+    .hero{
+        /* Imagem otimizada para telefones (menor resolução) */
+        background-image:url('../img/fotocllr.png');
+        background-size:cover;
+        background-position:center;
+        background-repeat: no-repeat;
+        background-attachment: scroll; /* Melhor performance no mobile */
+        min-height:60vh; /* Altura menor no mobile */
+        margin-top:60px;
+        width: 100vw; /* Largura total da viewport */
+        margin-left: calc(-50vw + 50%); /* Efeito sangria total */
+    }
+    /* OCULTAR OVERLAY MOBILE - Esconde botões dentro da imagem no mobile */
+    .hero-overlay{
+        display: none; /* Botões serão movidos para fora da imagem */
+    }
+    
+    /* EXIBIR BOTÕES MOBILE - Mostra seção de botões externa no mobile */
+    .hero-buttons-mobile{
+        display: block; /* Torna visível no mobile */
+        padding: 20px 15px;
+        background: #141414; /* Fundo escuro do Netflix */
+    }
+    /* BOTÕES MOBILE LAYOUT - Layout vertical dos botões no mobile */
+    .hero-buttons-mobile .buttons{
+        display: flex;
+        flex-direction: column; /* Botões empilhados verticalmente */
+        gap: 12px; /* Espaçamento entre botões */
+        width: 100%;
+    }
+    /* BOTÕES MOBILE ESTILO - Botões de largura total no mobile */
+    .hero-buttons-mobile .btn-play,
+    .hero-buttons-mobile .btn-info{
+        width: 100%; /* Largura total */
+        justify-content: center; /* Centraliza conteúdo */
+        padding: 15px 20px; /* Padding maior para melhor toque */
+        font-size: 16px;
+    }
+    .hero-overlay h1{
+        font-size:2rem;
+    }
+    .btn-play,.btn-info{
+        font-size:14px;
+        padding:8px 16px;
+    }
+    /* reduce gap in carousel for phones */
+    .wrap{
+        gap:16px;
+        grid-auto-columns:280px;
+        padding-left: 15px;
+    }
+    .section-title{
+        font-size:1.8rem;
+        margin:40px 0 20px 0;
+        padding:0 15px;
+    }
+    .carousel{
+        margin:15px 0 40px 0;
+        padding:0 15px;
+    }
+    .moments-section{
+        padding:30px 15px 60px 15px;
+        margin-top:20px;
+    }
+    
+    /* Position close button relative to modal-content for mobile */
+    #videoModal .modal-content {
+        position: relative;
+    }
+    
+    #videoModal .close-btn {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        font-size: 16px;
+        padding: 6px 8px;
+        width: 32px;
+        height: 32px;
+        z-index: 2001;
+        background: rgba(0, 0, 0, 0.8);
+        opacity: 0.9;
+    }
+}
+
+/* TÍTULOS DAS SEÇÕES - Estilização dos títulos das seções principais */
+.section-title{
+    font-size:2rem;
+    margin:80px 0 30px 20px; /* Margens generosas para espaçamento */
+    padding:0 20px;
+}
+/* CONTAINER DO CAROUSEL - Contêm o carrossel com overflow oculto */
+.carousel{
+    overflow:hidden; /* Esconde conteúdo que excede a largura */
+    width:100%;
+    margin:20px 0 60px 0;
+    padding:0 20px;
+}
+/* GRID DO CAROUSEL - Layout em grid com animação infinita horizontal */
+.wrap{
+    display:grid;
+    grid-auto-flow:column; /* Itens em linha horizontal */
+    grid-auto-columns:400px; /* Cada imagem tem 400px de largura */
+    gap:20px; /* Espaçamento entre imagens */
+    justify-items:stretch;
+    animation:slide 15s linear infinite; /* Animação infinita de 15 segundos */
+    padding-left: 20px;
+}
+/* IMAGENS DO CAROUSEL - Dimensões e estilo das imagens do carousel */
+.wrap img{
+    width:400px;
+    height:500px;
+    border-radius:10px; /* Bordas arredondadas */
+    object-fit:cover; /* Cobre área sem distorcer */
+}
+/* ANIMAÇÃO CAROUSEL - Movimento contínuo horizontal das imagens */
+@keyframes slide{
+    to{
+        translate:calc(-4 * 250px); /* Move 4 imagens para a esquerda */
+    }
+}
+
+/* Mobile animation adjustment */
+@media(max-width:768px){
+    @keyframes slide{
+        to{
+            translate:calc(-5 * 296px); /* 280px + 16px gap */
+        }
+    }
+}
+
+/* BLOCO NÃO UTILIZADO - classe .normal não existe no HTML
+.normal{
+    display:block;
+    clear:both;
+}
+*/
+
+@media(max-width:768px){
+    .hero-overlay h1{
+        font-size:2rem;
+    }
+    .btn-play,.btn-info{
+        font-size:14px;
+        padding: 8px 16px;
+    }
+    .carousel img{
+        width:150px;
+        height:225px;
+    }
+    /* adapt modal for smaller screens */
+    #videoModal {
+        padding: 15px;
+    }
+    #videoModal .modal-content {
+        max-width: 100vw;
+        max-height: 100vh;
+        width: 100%;
+        height: 100%;
+    }
+    
+    /* Base para vídeos mobile - sempre formato 9:16 */
+    #videoModal video {
+        width: calc(100vw - 30px); /* Desconta o padding do modal */
+        height: calc((100vw - 30px) * 16 / 9); /* Proporção 9:16 baseada na largura */
+        max-width: calc(100vw - 30px);
+        max-height: calc(100vh - 30px);
+        object-fit: contain;
+    }
+    
+    /* Se a altura calculada ultrapassar a tela, ajustar pela altura */
+    #videoModal video {
+        width: calc(100vw - 30px);
+        height: calc((100vw - 30px) * 16 / 9);
+        max-height: calc(100vh - 30px);
+    }
+    
+    /* Para vídeos verticais em mobile (formato Instagram) */
+    #videoModal video[data-orientation="vertical"] {
+        width: calc(100vw - 40px);
+        height: calc((100vw - 40px) * 16 / 9);
+        max-width: calc(100vw - 40px);
+        max-height: calc(100vh - 40px);
+        object-fit: contain;
+    }
+    
+    /* Para vídeos horizontais em mobile */
+    #videoModal video[data-orientation="horizontal"] {
+        width: calc(100vw - 40px);
+        height: calc((100vw - 40px) * 9 / 16);
+        max-width: calc(100vw - 40px);
+        max-height: calc(100vh - 40px);
+        object-fit: contain;
+    }
+}
+
+/* CONSOLIDAÇÃO: Comentando duplicações de media queries para mobile
+As regras do @media(max-width:768px) e @media(max-width:480px) já cobrem esses casos
+
+@media (max-width: 768px) and (orientation: portrait) {
+    #videoModal video:not([data-orientation]) {
+        width: calc(100vw - 40px);
+        height: calc((100vw - 40px) * 16 / 9);
+        max-height: calc(100vh - 60px);
+        object-fit: contain;
+    }
+    
+    #videoModal video {
+        width: min(calc(100vw - 40px), calc((100vh - 60px) * 9 / 16));
+        height: min(calc((100vw - 40px) * 16 / 9), calc(100vh - 60px));
+    }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+    #videoModal video:not([data-orientation]) {
+        width: calc(100vw - 40px);
+        height: calc((100vw - 40px) * 9 / 16);
+        max-height: calc(100vh - 40px);
+        object-fit: contain;
+    }
+    
+    #videoModal video[data-orientation="vertical"] {
+        width: calc((100vh - 40px) * 9 / 16);
+        height: calc(100vh - 40px);
+        max-width: calc(100vw - 40px);
+    }
+}
+*/
+
+@media(max-width:480px){
+    .nav-links a{
+        font-size:12px;
+    }
+    .navbar{
+        padding:8px 10px;
+    }
+    .nav-links{
+        gap: 15px;
+    }
+    .logo{
+        width:90px;
+        left: 10px;
+        top: 50%;
+        transform: translateY(-50%);
+    }
+    /* Ajustes nos botões móveis para telas menores */
+    .hero-buttons-mobile{
+        padding: 15px 10px;
+    }
+    .hero-buttons-mobile .btn-play,
+    .hero-buttons-mobile .btn-info{
+        padding: 12px 16px;
+        font-size: 14px;
+    }
+    
+    /* Modal otimizado para smartphones pequenos */
+    #videoModal {
+        padding: 10px;
+    }
+    
+    #videoModal video {
+        width: calc(100vw - 20px);
+        height: calc((100vw - 20px) * 16 / 9);
+        max-width: calc(100vw - 20px);
+        max-height: calc(100vh - 20px);
+    }
+    
+    #videoModal video[data-orientation="vertical"] {
+        width: calc(100vw - 25px);
+        height: calc((100vw - 25px) * 16 / 9);
+        max-height: calc(100vh - 25px);
+    }
+    
+    #videoModal video[data-orientation="horizontal"] {
+        width: calc(100vw - 25px);
+        height: calc((100vw - 25px) * 9 / 16);
+        max-height: calc(100vh - 25px);
+    }
+    
+    #videoModal .close-btn {
+        top: 8px;
+        right: 8px;
+        font-size: 14px;
+        width: 28px;
+        height: 28px;
+        background: rgba(0, 0, 0, 0.9);
+        opacity: 1;
+    }
+}
+
+/* ESTILIZAÇÃO DE SCROLLBARS - pode ser desnecessário para a maioria dos casos */
+/* .carousel::-webkit-scrollbar{
+    height:10px;
+}
+.carousel::-webkit-scrollbar-thumb{
+    background:#333;
+    border-radius:5px;
+} */
+
+/* SEÇÃO MOMENTOS - Container da galeria de fotos e vídeos */
+.moments-section{
+    padding:40px 20px 80px 20px;
+    margin-top:40px;
+}
+/* GRID DE MOMENTOS - Layout responsivo em grid para a galeria */
+.moments-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); /* Colunas adaptavas com mínimo de 200px */
+    gap:20px; /* Espaçamento entre itens */
+    margin-top:30px;
+    padding:0 10px;
+}
+/* ITEM DE MOMENTO - Container individual para cada foto/vídeo da galeria */
+.moment-item{
+    border-radius:10px;
+    overflow:hidden; /* Garante bordas arredondadas */
+    background:#222; /* Fundo de fallback */
+    aspect-ratio:1; /* Proporção quadrada (1:1) */
+}
+/* IMAGENS DOS MOMENTOS - Configuração das imagens na galeria */
+.moment-item img{
+    width:100%;
+    height:100%;
+    object-fit:cover; /* Preenche sem distorcer */
+    display:block;
+    transition: transform 0.3s ease; /* Animação suave no hover */
+}
+/* VÍDEOS DOS MOMENTOS - Configuração dos vídeos na galeria */
+.moment-item video{
+    width:100%;
+    height:100%;
+    object-fit:cover;
+    display:block;
+    transition: transform 0.3s ease;
+}
+/* EFEITO HOVER MOMENTOS - Zoom sutil ao passar mouse sobre imagens/vídeos */
+.moment-item:hover img,
+.moment-item:hover video{
+    transform: scale(1.05); /* Ampliação de 5% */
+}
+
+/* RESPONSIVO 1200px - Ajustes para telas médias (tablets landscape) */
+@media(max-width:1200px){
+    .moments-grid{
+        grid-template-columns:repeat(auto-fit, minmax(250px, 1fr)); /* Itens ligeiramente maiores */
+        gap:15px; /* Gap reduzido */
+    }
+}
+/* RESPONSIVO 768px - Adaptações para tablets portrait */
+@media(max-width:768px){
+    .moments-grid{
+        grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); /* Itens menores */
+        gap:12px;
+        padding:0 5px;
+    }
+}
+/* RESPONSIVO 480px - Smartphones em modo retrato */
+@media(max-width:480px){
+    /* GRID FIXO MOBILE - Três itens por linha para aproveitar melhor o espaço */
+    .moments-grid{
+        grid-template-columns:repeat(3, 1fr); /* Exatamente 3 colunas */
+        gap:8px; /* Gap mínimo */
+        padding:0;
+    }
+    /* PROPORÇÃO MANTIDA - Garante que itens permaneçam quadrados */
+    .moment-item{
+        aspect-ratio: 1;
+    }
+    /* TÍTULO MENOR - Reduz tamanho do título para telas pequenas */
+    .section-title{
+        font-size:1.5rem;
+        margin:30px 0 15px 0;
+        padding:0 10px;
+    }
+    /* CAROUSEL PEQUENO - Adaptação do carousel para telas muito pequenas */
+    .wrap{
+        gap:10px; /* Gap mínimo */
+        grid-auto-columns:200px; /* Imagens menores */
+        padding-left: 10px;
+    }
+    /* IMAGENS CAROUSEL MOBILE - Dimensões reduzidas para smartphones */
+    .carousel img{
+        width:200px; /* Largura reduzida */
+        height:300px; /* Altura proporcional */
+    }
+/* ANIMAÇÃO DUPLICADA - removida, já definida no media query 768px acima
+    @keyframes slide{
+        to{
+            translate:calc(-5 * 210px);
+        }
+    }
+*/
+    /* ESPAÇAMENTO REDUZIDO - Ajustes de padding para telas pequenas */
+    .moments-section{
+        padding:20px 10px 40px 10px; /* Padding menor */
+        margin-top:15px;
+    }
+    /* CAROUSEL MOBILE SPACING - Margens otimizadas para mobile */
+    .carousel{
+        margin:10px 0 30px 0;
+        padding:0 10px;
+    }
+}

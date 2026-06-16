@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: goiabal-site
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn Main:app --bind 0.0.0.0:$PORT
+    envVars:
+      - key: FLASK_DEBUG
+        value: "0"
+      - key: SPACES_BUCKET
+        value: ""
+      - key: SPACES_REGION
+        value: ""
+      - key: SPACES_KEY
+        value: ""
+      - key: SPACES_SECRET
+        value: ""
+      - key: SPACES_ENDPOINT_URL
+        value: "https://nyc3.digitaloceanspaces.com"
+      - key: SPACES_PUBLIC
+        value: "1"
