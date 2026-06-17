@@ -1,81 +1,233 @@
-# Deploy do site em nuvem
+# 🌿 Parque-Goaibal
 
-Este projeto pode ser hospedado em um serviço como Render, Railway ou PythonAnywhere.
+Plataforma web open source para **registro da biodiversidade e denúncias ambientais** no Parque do Goiabal, em Ituiutaba - MG.
 
-## Passo a passo para Render
+O projeto foi desenvolvido com o objetivo de aproximar comunidade, visitantes e pesquisadores da preservação ambiental através do registro colaborativo de espécies e comunicação de ocorrências ambientais.
 
-1. Crie uma conta em https://render.com
-2. Crie um novo Web Service.
-3. Conecte seu repositório Git ou faça deploy manual.
-4. Use as configurações:
-   - Build Command: `pip install -r requirements.txt`
-   - Start Command: `gunicorn Main:app`
-   - Environment: `PORT` é definido automaticamente pelo Render.
+---
 
-## Passo a passo para Railway
+## 📷 Visão Geral
 
-1. Crie uma conta em https://railway.app
-2. Faça novo projeto e escolha `Deploy from GitHub` ou `Deploy from repo`.
-3. Adicione um recurso de banco de dados PostgreSQL no Railway.
-4. Copie a string de conexão do Railway Postgres e defina a variável de ambiente `DATABASE_URL`.
-5. No comando de start, escolha: `gunicorn Main:app`
-6. O Railway define a variável `PORT` automaticamente.
+O Parque-Goaibal permite que usuários:
 
-## Observações
+🦋 Registrem espécies de fauna e flora  
+📸 Compartilhem imagens da biodiversidade local  
+🚨 Reportem problemas ambientais (incêndios, poluição etc.)  
+👤 Criem contas e acompanhem suas contribuições  
+🗺️ Visualizem registros realizados pela comunidade  
 
-- O aplicativo já serve `index.html` e o endpoint `/uploads/<filename>` para imagens.
-- Render define `PORT` automaticamente.
-- O arquivo `render.yaml` também está incluído para facilitar o deploy automático no Render.
-- Em produção, remova `debug=True` ou defina `FLASK_DEBUG=0`.
-- O backend não roda no GitHub Pages. O GitHub Pages serve apenas o frontend estático.
-- Para o frontend hospedado no GitHub Pages, use o URL público do backend (por exemplo `https://goiabal-site.onrender.com`) na variável `API_BASE_URL` de `index.html`.
-- Se o seu serviço Render tiver outro domínio, atualize `API_BASE_URL` com esse URL.
-- Atenção: o banco SQLite e uploads em disco são efêmeros no Render; use armazenamento externo para dados persistentes se precisar.
-- Caso use outro serviço, garanta que o deploy execute `pip install -r requirements.txt` e `gunicorn Main:app`.
+---
 
-## Banco de dados Railway Postgres
+## ✨ Funcionalidades
 
-Para persistir usuários, logins e dados do aplicativo, use Railway Postgres como banco principal.
+### 👤 Sistema de Usuários
+- Cadastro de usuários
+- Login com autenticação
+- Upload de foto de perfil
+- Perfil individual
 
-1. Crie um banco de dados PostgreSQL no Railway.
-2. Copie a string de conexão e defina a variável de ambiente:
-   - `DATABASE_URL` = string de conexão do banco Postgres do Railway
-3. No deploy, certifique-se de que `DATABASE_URL` esteja configurado no Railway.
-4. Crie o esquema de tabelas `users`, `registros` e `denuncias` usando o próprio app ou SQL.
-5. Opcionalmente, use Supabase apenas para storage de imagens e mantenha o banco no Railway.
+### 🦋 Registro de Biodiversidade
+- Cadastro de espécies
+- Upload de imagens
+- Informações de localização
+- Histórico de registros
 
-## Supabase storage opcional
+### 🚨 Sistema de Denúncias
+- Registro de ocorrências ambientais
+- Classificação por tipo
+- Controle de status
 
-Para que as imagens continuem disponíveis após atualizações e deploys, você deve configurar um storage externo. O backend não deve depender de `uploads/` locais em Railway ou outros ambientes efêmeros.
+### 📸 Galeria Comunitária
+- Feed com imagens da comunidade
+- Curtidas em registros
+- Visualização ampliada das imagens
 
-Se quiser continuar usando Supabase para armazenamento de imagens, defina estas variáveis:
-   - `SUPABASE_URL` = URL do projeto Supabase (ex: `https://<projeto>.supabase.co`)
-   - `SUPABASE_SERVICE_ROLE_KEY` = chave de serviço (recomendado para uploads seguros)
-   - `SUPABASE_STORAGE_BUCKET` = nome do bucket de storage
+### ☁️ Armazenamento
+- Upload e gerenciamento de arquivos com Supabase Storage
+- Fallback para armazenamento local
 
-O backend agora usa Railway Postgres como banco principal e um storage externo para imagens quando essas variáveis estão configuradas.
+---
 
-6. Use `GET /api/storage_check` para validar se a configuração de storage externa está funcionando.
+## 🛠️ Tecnologias Utilizadas
 
-## DigitalOcean Spaces
+### Frontend
+- HTML5
+- CSS3
+- JavaScript
+- Leaflet (Mapas)
 
-1. Crie um Space no painel da DigitalOcean.
-2. Defina as variáveis de ambiente no Render ou no serviço de hospedagem:
-   - `SPACES_BUCKET` = nome do Space
-   - `SPACES_REGION` = região do Space (`nyc3`, `sfo2`, `ams3`, etc.)
-   - `SPACES_KEY` = access key do Space
-   - `SPACES_SECRET` = secret key do Space
-   - `SPACES_ENDPOINT_URL` = `https://<REGION>.digitaloceanspaces.com`
-   - Opcional: `SPACES_PUBLIC=1` para publicar objetos como `public-read`
-3. O backend também aceita variáveis alternativas com prefixo `DO_SPACES_`.
-4. Verifique a configuração com `GET /api/storage_check`.
+### Backend
+- Python
+- Flask
+- Flask SQLAlchemy
+- Flask CORS
 
-## Comandos úteis
+### Banco de Dados
+- SQLite (desenvolvimento)
+- PostgreSQL (produção)
 
-- Verificar antes de migrar:
-  - `python scripts/preview_migration_csv.py`
-- Migrar os arquivos atuais de `uploads/` para o Space e atualizar o DB:
-  - `python scripts/migrate_uploads_to_s3.py --apply --public`
-- Testar o storage em execução local:
-  - `curl http://127.0.0.1:5000/api/storage_check`
-- No Render, se o frontend estiver em outro domínio, use o URL do backend em `index.html`.
+### Infraestrutura
+- Railway
+- Supabase
+
+---
+
+## 🚀 Como executar localmente
+
+### 1. Clone o repositório
+
+```bash
+git clone https://github.com/SEU-USUARIO/Parque-Goaibal.git
+```
+
+### 2. Entre na pasta
+
+```bash
+cd Parque-Goaibal
+```
+
+### 3. Crie um ambiente virtual
+
+Windows:
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+Linux/Mac:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+```
+
+### 4. Instale as dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 5. Configure as variáveis de ambiente
+
+Crie um arquivo `.env`
+
+```env
+DATABASE_URL=
+
+SUPABASE_URL=
+SUPABASE_KEY=
+SUPABASE_STORAGE_BUCKET=
+
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
+ADMIN_NOME=
+```
+
+### 6. Execute o projeto
+
+```bash
+python Main.py
+```
+
+Servidor disponível em:
+
+```txt
+http://localhost:5000
+```
+
+---
+
+## 📁 Estrutura do Projeto
+
+```txt
+Parque-Goaibal/
+│
+├── Main.py
+├── index.html
+├── uploads/
+├── goiabal.db
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## 🔌 Principais Endpoints
+
+| Método | Endpoint | Descrição |
+|---------|----------|-----------|
+| POST | `/api/register` | Criar conta |
+| POST | `/api/login` | Login |
+| GET | `/api/registros` | Listar registros |
+| POST | `/api/registros` | Criar registro |
+| GET | `/api/health` | Status da API |
+| GET | `/api/storage_check` | Verificar armazenamento |
+
+---
+
+## 🌍 Deploy
+
+Projeto hospedado utilizando Railway:
+
+https://railway.com/project/7e679b58-7e6f-42e2-91e5-23d95d72a818/service/e132ac30-c2eb-4a5a-96b4-83e99e346bb4?environmentId=abc6136d-1a33-4297-8601-ae6ff5dfdb92
+
+---
+
+## 👥 Equipe
+
+- Luís Octavio Lacerda Pereira
+- Douglas Santana de Oliveira
+- Gustavo Marques
+- Lucas Freitas
+
+---
+
+## 🤝 Contribuições
+
+Contribuições são bem-vindas.
+
+Para contribuir:
+
+1. Faça um fork
+2. Crie uma branch
+
+```bash
+git checkout -b minha-feature
+```
+
+3. Commit
+
+```bash
+git commit -m "feat: nova funcionalidade"
+```
+
+4. Push
+
+```bash
+git push origin minha-feature
+```
+
+5. Abra um Pull Request
+
+---
+
+## 📄 Licença
+
+Este projeto está licenciado sob a **GNU General Public License v3.0 (GPL-3.0)**.
+
+Você pode utilizar, modificar e redistribuir o código respeitando os termos da licença.
+
+Consulte o arquivo:
+
+```txt
+LICENSE
+```
+
+---
+
+<div align="center">
+
+Feito para incentivar tecnologia, comunidade e preservação ambiental 🌿
+
+</div>
