@@ -564,8 +564,15 @@ def denuncias():
         gravidade = request.form.get('gravidade')
         lat = request.form.get('lat')
         lng = request.form.get('lng')
-        if lat: lat = float(lat)
-        if lng: lng = float(lng)
+        def _to_float_or_none(v):
+            if v is None or v == '':
+                return None
+            try:
+                return float(v)
+            except (ValueError, TypeError):
+                return None
+        lat = _to_float_or_none(lat)
+        lng = _to_float_or_none(lng)
         if not tipo or not desc:
             return jsonify({'error': 'Dados obrigatórios faltando'}), 400
 
